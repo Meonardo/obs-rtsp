@@ -1,17 +1,17 @@
 cmake_minimum_required(VERSION 3.22...3.25)
 
-option(ENABLE_RTSP "Enable WebRTC Output support" ON)
+option(ENABLE_RTSP "Enable RTSP source support" ON)
 if(NOT ENABLE_RTSP)
   target_disable(obs-rtsp)
   return()
 endif()
 
+add_library(obs-rtsp MODULE)
+add_library(OBS::rtsp ALIAS obs-rtsp)
+
 # live555
 add_subdirectory(deps/live555)
 set(LIVE555 deps/live555/live)
-
-add_library(obs-rtsp MODULE)
-add_library(OBS::rtsp ALIAS obs-rtsp)
 
 target_include_directories(
   obs-rtsp
@@ -47,6 +47,7 @@ target_link_libraries(
   PRIVATE
 
   OBS::libobs
+  liblive555helper
 )
 
-set_target_properties_obs(obs-rtsp PROPERTIES FOLDER plugins PREFIX "")
+set_target_properties_obs(obs-rtsp PROPERTIES FOLDER plugins/obs-rtsp PREFIX "")

@@ -36,3 +36,5 @@ target_include_directories(
 target_compile_definitions(liblive555helper PRIVATE _CRT_SECURE_NO_WARNINGS=1 NO_GETIFADDRS=1 NO_STD_LIB=1)
 target_link_libraries(liblive555helper ws2_32)
 target_compile_definitions(liblive555helper PUBLIC NO_OPENSSL=1)
+
+set_target_properties_obs(liblive555helper PROPERTIES FOLDER plugins/obs-rtsp)
