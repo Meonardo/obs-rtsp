@@ -42,8 +42,7 @@ struct NaluIndex {
 
 // Returns a vector of the NALU indices in the given buffer.
 std::vector<NaluIndex> FindNaluIndices(const uint8_t *buffer,
-				       size_t buffer_size)
-{
+				       size_t buffer_size) {
 	// This is sorta like Boyer-Moore, but with only the first optimization step:
 	// given a 3-byte sequence we're looking at, if the 3rd byte isn't 1 or 0,
 	// skip ahead to the next 3-byte sequence. 0s and 1s are relatively rare, so
@@ -53,8 +52,8 @@ std::vector<NaluIndex> FindNaluIndices(const uint8_t *buffer,
 		return sequences;
 
 	static_assert(
-		kNaluShortStartSequenceSize >= 2,
-		"kNaluShortStartSequenceSize must be larger or equals to 2");
+	  kNaluShortStartSequenceSize >= 2,
+	  "kNaluShortStartSequenceSize must be larger or equals to 2");
 	const size_t end = buffer_size - kNaluShortStartSequenceSize;
 	for (size_t i = 0; i < end;) {
 		if (buffer[i + 2] > 1) {
@@ -71,8 +70,8 @@ std::vector<NaluIndex> FindNaluIndices(const uint8_t *buffer,
 				auto it = sequences.rbegin();
 				if (it != sequences.rend())
 					it->payload_size =
-						index.start_offset -
-						it->payload_start_offset;
+					  index.start_offset -
+					  it->payload_start_offset;
 
 				sequences.push_back(index);
 			}
@@ -92,16 +91,14 @@ std::vector<NaluIndex> FindNaluIndices(const uint8_t *buffer,
 }
 
 // Get the NAL type from the header byte immediately following start sequence.
-NaluType ParseNaluType(uint8_t data)
-{
+NaluType ParseNaluType(uint8_t data) {
 	return static_cast<NaluType>(data & kNaluTypeMask);
 }
 } // namespace utils::h264
 
 namespace source {
 
-RTSPClient *RTSPClient::Create(const std::string &uri)
-{
+RTSPClient *RTSPClient::Create(const std::string &uri) {
 	std::map<std::string, std::string> opts;
 	opts["timeout"] = "15";
 	auto client = new RTSPClient(uri, opts);
@@ -110,44 +107,37 @@ RTSPClient *RTSPClient::Create(const std::string &uri)
 
 RTSPClient::RTSPClient(const std::string &uri,
 		       const std::map<std::string, std::string> &opts)
-	: stop_(0),
-	  client_(env_, this, uri.c_str(), opts, 2)
-{
+  : stop_(0),
+    client_(env_, this, uri.c_str(), opts, 2) {
 	this->Start();
 }
 
-RTSPClient::~RTSPClient()
-{
+RTSPClient::~RTSPClient() {
 	this->Stop();
 }
 
-bool RTSPClient::IsRunning()
-{
+bool RTSPClient::IsRunning() {
 	return (stop_ == 0);
 }
 
-void RTSPClient::CaptureThread()
-{
+void RTSPClient::CaptureThread() {
 	SetThreadDescription(GetCurrentThread(), L"rtsp_capture_thread");
 	env_.mainloop();
 }
 
-void RTSPClient::Start()
-{
+void RTSPClient::Start() {
 	// RTCLogApp("RTSP client started");
 	capture_thread_ = std::thread(&RTSPClient::CaptureThread, this);
 }
 
-void RTSPClient::Stop()
-{
+void RTSPClient::Stop() {
 	// RTCLogApp("RTSP client stopped");
 	env_.stop();
 	capture_thread_.join();
 }
 
 bool RTSPClient::onNewSession(const char *id, const char *media,
-			      const char *codec, const char *sdp)
-{
+			      const char *codec, const char *sdp) {
 	bool success = false;
 	if (strcmp(media, "video") == 0) {
 		/*RTCLogApp("New session created: id: %s, media: %s, codec: %s, sdp: %s",
@@ -162,39 +152,34 @@ bool RTSPClient::onNewSession(const char *id, const char *media,
 }
 
 bool RTSPClient::onData(const char *id, unsigned char *buffer, ssize_t size,
-			struct timeval presentationTime)
-{
+			struct timeval presentationTime) {
 	ProcessBuffer(id, buffer, size, presentationTime);
 	return true;
 }
 
-void RTSPClient::onError(RTSPConnection &connection, const char *message)
-{
+void RTSPClient::onError(RTSPConnection &connection, const char *message) {
 	// RTCLogError("RTSP client error: %s", message);
 }
 
-void RTSPClient::onConnectionTimeout(RTSPConnection &connection)
-{
+void RTSPClient::onConnectionTimeout(RTSPConnection &connection) {
 	// RTCLogApp("RTSP client connect timeout");
 }
 
-void RTSPClient::onDataTimeout(RTSPConnection &connection)
-{
+void RTSPClient::onDataTimeout(RTSPConnection &connection) {
 	// RTCLogApp("RTSP client data timeout");
 }
 
 void RTSPClient::ProcessBuffer(const char *id, unsigned char *buffer,
-			       ssize_t size, struct timeval presentationTime)
-{
+			       ssize_t size, struct timeval presentationTime) {
 	std::string codec = codec_[id];
 	if (codec == "H264") {
 		std::vector<utils::h264::NaluIndex> indexes =
-			utils::h264::FindNaluIndices(buffer, size);
+		  utils::h264::FindNaluIndices(buffer, size);
 
 		for (const utils::h264::NaluIndex &index : indexes) {
 			utils::h264::NaluType nalu_type =
-				utils::h264::ParseNaluType(
-					buffer[index.payload_start_offset]);
+			  utils::h264::ParseNaluType(
+			    buffer[index.payload_start_offset]);
 			if (nalu_type == utils::h264::NaluType::kSps) {
 				// blog(LOG_INFO, "SPS NALU");
 
@@ -202,8 +187,8 @@ void RTSPClient::ProcessBuffer(const char *id, unsigned char *buffer,
 				cfg_.insert(cfg_.end(),
 					    buffer + index.start_offset,
 					    buffer + index.payload_size +
-						    index.payload_start_offset -
-						    index.start_offset);
+					      index.payload_start_offset -
+					      index.start_offset);
 				/*size_t w, h;
         bool ret = libwebrtc::RTCUtils::
                 ParseH264SizeInfoFromSPSNALU(
@@ -226,8 +211,8 @@ void RTSPClient::ProcessBuffer(const char *id, unsigned char *buffer,
 				cfg_.insert(cfg_.end(),
 					    buffer + index.start_offset,
 					    buffer + index.payload_size +
-						    index.payload_start_offset -
-						    index.start_offset);
+					      index.payload_start_offset -
+					      index.start_offset);
 			} else if (nalu_type == utils::h264::NaluType::kSei) {
 				// blog(LOG_INFO, "SEI NALU");
 			} else {
@@ -246,12 +231,11 @@ void RTSPClient::ProcessBuffer(const char *id, unsigned char *buffer,
 				//	     nalu_type);
 				// }
 
-				content.insert(
-					content.end(),
-					buffer + index.start_offset,
-					buffer + index.payload_size +
-						index.payload_start_offset -
-						index.start_offset);
+				content.insert(content.end(),
+					       buffer + index.start_offset,
+					       buffer + index.payload_size +
+						 index.payload_start_offset -
+						 index.start_offset);
 
 				/*receiver_->FeedVideoPacket(content.data(), content.size(), keyframe,
                                    width_, height_);*/

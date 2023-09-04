@@ -1,10 +1,8 @@
 #include "rtsp_source.h"
 
 RtspSource::RtspSource(obs_data_t *settings, obs_source_t *source)
-	: settings(settings),
-	  source(source)
-{
-}
+  : settings(settings),
+    source(source) {}
 
 RtspSource::~RtspSource() {}
 
@@ -12,33 +10,27 @@ void RtspSource::Update(obs_data_t *settings) {}
 
 void RtspSource::GetDefaults(obs_data_t *settings) {}
 
-obs_properties *RtspSource::GetProperties()
-{
+obs_properties *RtspSource::GetProperties() {
 	return nullptr;
 }
 
-int64_t RtspSource::GetTime()
-{
+int64_t RtspSource::GetTime() {
 	return 0;
 }
 
-int64_t RtspSource::GetDuration()
-{
+int64_t RtspSource::GetDuration() {
 	return 0;
 }
 
-enum obs_media_state RtspSource::GetState()
-{
+enum obs_media_state RtspSource::GetState() {
 	return OBS_MEDIA_STATE_NONE;
 }
 
-uint32_t RtspSource::GetWidth()
-{
+uint32_t RtspSource::GetWidth() {
 	return 0;
 }
 
-uint32_t RtspSource::GetHeight()
-{
+uint32_t RtspSource::GetHeight() {
 	return 0;
 }
 
@@ -54,8 +46,7 @@ void RtspSource::Hide() {}
 
 void RtspSource::Show() {}
 
-void register_rtsp_source()
-{
+void register_rtsp_source() {
 	struct obs_source_info info = {};
 
 	info.id = "rtsp_source";
