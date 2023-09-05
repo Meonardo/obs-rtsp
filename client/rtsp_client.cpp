@@ -1,4 +1,4 @@
-#include "../client/rtsp_client.h"
+#include "rtsp_client.h"
 
 namespace utils::h264 {
 // The size of a full NALU start sequence {0 0 0 1}, used for the first NALU
@@ -41,7 +41,7 @@ struct NaluIndex {
 };
 
 // Returns a vector of the NALU indices in the given buffer.
-std::vector<NaluIndex> FindNaluIndices(const uint8_t *buffer,
+std::vector<NaluIndex> FindNaluIndices(const uint8_t* buffer,
 				       size_t buffer_size) {
 	// This is sorta like Boyer-Moore, but with only the first optimization step:
 	// given a 3-byte sequence we're looking at, if the 3rd byte isn't 1 or 0,
@@ -97,51 +97,55 @@ NaluType ParseNaluType(uint8_t data) {
 } // namespace utils::h264
 
 namespace source {
-
-RTSPClient *RTSPClient::Create(const std::string &uri) {
-	std::map<std::string, std::string> opts;
-	opts["timeout"] = "15";
-	auto client = new RTSPClient(uri, opts);
-	return client;
-}
-
-RTSPClient::RTSPClient(const std::string &uri,
-		       const std::map<std::string, std::string> &opts)
+RtspClient::RtspClient(const std::string& uri,
+		       const std::map<std::string, std::string>& opts,
+		       RTSPClientObserver* observer)
   : stop_(0),
-    client_(env_, this, uri.c_str(), opts, 2) {
+    client_(env_, this, uri.c_str(), opts, 2),
+    observer_(observer) {
 	this->Start();
 }
 
-RTSPClient::~RTSPClient() {
+RtspClient::~RtspClient() {
 	this->Stop();
 }
 
-bool RTSPClient::IsRunning() {
+bool RtspClient::IsRunning() {
 	return (stop_ == 0);
 }
 
-void RTSPClient::CaptureThread() {
+uint32_t RtspClient::GetWidth() const {
+	return width_;
+}
+
+uint32_t RtspClient::GetHeight() const {
+	return height_;
+}
+
+void RtspClient::CaptureThread() {
 	SetThreadDescription(GetCurrentThread(), L"rtsp_capture_thread");
 	env_.mainloop();
 }
 
-void RTSPClient::Start() {
-	// RTCLogApp("RTSP client started");
-	capture_thread_ = std::thread(&RTSPClient::CaptureThread, this);
+void RtspClient::Start() {
+	blog(LOG_INFO, "RTSP client started");
+	capture_thread_ = std::thread(&RtspClient::CaptureThread, this);
 }
 
-void RTSPClient::Stop() {
-	// RTCLogApp("RTSP client stopped");
+void RtspClient::Stop() {
+	blog(LOG_INFO, "RTSP client stopped");
 	env_.stop();
 	capture_thread_.join();
 }
 
-bool RTSPClient::onNewSession(const char *id, const char *media,
-			      const char *codec, const char *sdp) {
+bool RtspClient::onNewSession(const char* id, const char* media,
+			      const char* codec, const char* sdp) {
 	bool success = false;
 	if (strcmp(media, "video") == 0) {
-		/*RTCLogApp("New session created: id: %s, media: %s, codec: %s, sdp: %s",
-                id, media, codec, sdp);*/
+		blog(
+		  LOG_INFO,
+		  "New session created: id: %s, media: %s, codec: %s, sdp: %s",
+		  id, media, codec, sdp);
 
 		if ((strcmp(codec, "H264") == 0)) { // only support H.264 codec
 			codec_[id] = codec;
@@ -151,32 +155,35 @@ bool RTSPClient::onNewSession(const char *id, const char *media,
 	return success;
 }
 
-bool RTSPClient::onData(const char *id, unsigned char *buffer, ssize_t size,
+bool RtspClient::onData(const char* id, unsigned char* buffer, ssize_t size,
 			struct timeval presentationTime) {
 	ProcessBuffer(id, buffer, size, presentationTime);
 	return true;
 }
 
-void RTSPClient::onError(RTSPConnection &connection, const char *message) {
-	// RTCLogError("RTSP client error: %s", message);
+void RtspClient::onError(RTSPConnection& connection, const char* message) {
+	blog(LOG_ERROR, "RTSP client error : %s", message);
+	observer_->OnError(message);
 }
 
-void RTSPClient::onConnectionTimeout(RTSPConnection &connection) {
-	// RTCLogApp("RTSP client connect timeout");
+void RtspClient::onConnectionTimeout(RTSPConnection& connection) {
+	blog(LOG_INFO, "RTSP client connect timeout");
+	observer_->OnSessionStopped("timeout");
 }
 
-void RTSPClient::onDataTimeout(RTSPConnection &connection) {
-	// RTCLogApp("RTSP client data timeout");
+void RtspClient::onDataTimeout(RTSPConnection& connection) {
+	blog(LOG_INFO, "RTSP client data timeout");
+	observer_->OnSessionStopped("timeout");
 }
 
-void RTSPClient::ProcessBuffer(const char *id, unsigned char *buffer,
+void RtspClient::ProcessBuffer(const char* id, unsigned char* buffer,
 			       ssize_t size, struct timeval presentationTime) {
 	std::string codec = codec_[id];
 	if (codec == "H264") {
 		std::vector<utils::h264::NaluIndex> indexes =
 		  utils::h264::FindNaluIndices(buffer, size);
 
-		for (const utils::h264::NaluIndex &index : indexes) {
+		for (const utils::h264::NaluIndex& index : indexes) {
 			utils::h264::NaluType nalu_type =
 			  utils::h264::ParseNaluType(
 			    buffer[index.payload_start_offset]);
@@ -237,8 +244,9 @@ void RTSPClient::ProcessBuffer(const char *id, unsigned char *buffer,
 						 index.payload_start_offset -
 						 index.start_offset);
 
-				/*receiver_->FeedVideoPacket(content.data(), content.size(), keyframe,
-                                   width_, height_);*/
+				observer_->OnData(content.data(),
+						  content.size(),
+						  presentationTime);
 			}
 		}
 	}

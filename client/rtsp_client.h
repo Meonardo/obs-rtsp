@@ -1,22 +1,35 @@
 #pragma once
 
+#include <obs-module.h>
+
 #include <thread>
 #include <vector>
 #include <string>
-#include <unordered_map>
+#include <map>
+#include <mutex>
 
 #include "rtspconnectionclient.h"
 
 namespace source {
-
-class RTSPClient : public RTSPConnection::Callback {
+class RTSPClientObserver {
 public:
-	RTSPClient(const std::string &uri,
-		   const std::map<std::string, std::string> &opts);
+	virtual ~RTSPClientObserver() = default;
 
-	virtual ~RTSPClient();
+	virtual void OnSessionStarted(const char* id, const char* media,
+				      const char* codec, const char* sdp) = 0;
+	virtual void OnSessionStopped(const char* msg) = 0;
+	virtual void OnData(unsigned char* buffer, ssize_t size,
+			    struct timeval presentationTime) = 0;
+	virtual void OnError(const char* msg) = 0;
+};
 
-	static RTSPClient *Create(const std::string &uri);
+class RtspClient : public RTSPConnection::Callback {
+public:
+	RtspClient(const std::string& uri,
+		   const std::map<std::string, std::string>& opts,
+		   RTSPClientObserver* observer);
+
+	virtual ~RtspClient();
 
 	// start RTSP connection
 	void Start();
@@ -27,18 +40,23 @@ public:
 	// the thread is capturing RTSP stream
 	void CaptureThread();
 
-	virtual bool onNewSession(const char *id, const char *media,
-				  const char *codec, const char *sdp) override;
-	virtual bool onData(const char *id, unsigned char *buffer, ssize_t size,
+	// the video resolution info
+	uint32_t GetWidth() const;
+	uint32_t GetHeight() const;
+
+	virtual bool onNewSession(const char* id, const char* media,
+				  const char* codec, const char* sdp) override;
+	virtual bool onData(const char* id, unsigned char* buffer, ssize_t size,
 			    struct timeval presentationTime) override;
-	virtual void onError(RTSPConnection &connection,
-			     const char *message) override;
-	virtual void onConnectionTimeout(RTSPConnection &connection) override;
-	virtual void onDataTimeout(RTSPConnection &connection) override;
+	virtual void onError(RTSPConnection& connection,
+			     const char* message) override;
+	virtual void onConnectionTimeout(RTSPConnection& connection) override;
+	virtual void onDataTimeout(RTSPConnection& connection) override;
 
 private:
 	char stop_;
 	Environment env_;
+	RTSPClientObserver* observer_;
 
 protected:
 	RTSPConnection client_;
@@ -48,10 +66,10 @@ private:
 	std::map<std::string, std::string> codec_;
 	std::vector<uint8_t> cfg_;
 	// video resolution info
-	size_t width_ = 1920;
-	size_t height_ = 1080;
+	uint32_t width_ = 1920;
+	uint32_t height_ = 1080;
 
-	void ProcessBuffer(const char *id, unsigned char *buffer, ssize_t size,
+	void ProcessBuffer(const char* id, unsigned char* buffer, ssize_t size,
 			   struct timeval presentationTime);
 };
 

@@ -4,7 +4,7 @@
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-rtsp", "en-US")
-MODULE_EXPORT const char *obs_module_description(void) {
+MODULE_EXPORT const char* obs_module_description(void) {
 	return "OBS rtsp module";
 }
 
