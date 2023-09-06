@@ -52,7 +52,7 @@ void RtspSource::GetDefaults(obs_data_t* settings) {
 	obs_data_set_default_string(settings, "url", "rtsp://");
 	obs_data_set_default_bool(settings, "stop_on_hide", true);
 	obs_data_set_default_bool(settings, "restart_on_error", true);
-	obs_data_set_default_int(settings, "restart_timeout", 15000);
+	obs_data_set_default_int(settings, "restart_timeout", 20);
 	obs_data_set_default_bool(settings, "block_video", false);
 	obs_data_set_default_bool(settings, "block_audio", false);
 	obs_data_set_default_bool(settings, "drop_video", false);
@@ -73,8 +73,8 @@ obs_properties* RtspSource::GetProperties() {
 	obs_properties_add_bool(
 	  props, "restart_on_error",
 	  "Try to restart after pipeline encountered an error");
-	obs_properties_add_int(props, "restart_timeout", "Error timeout (ms)",
-			       0, 10000, 100);
+	obs_properties_add_int(props, "restart_timeout", "Error timeout seconds",
+			       0, 20, 1);
 	obs_properties_add_bool(props, "stop_on_hide",
 				"Stop pipeline when hidden");
 	obs_properties_add_bool(
@@ -163,7 +163,7 @@ bool RtspSource::OnApplyBtnClicked(obs_properties_t* props,
 
 	uint64_t timeout = obs_data_get_int(settings_, "restart_timeout");
 	std::map<std::string, std::string> opts;
-	opts["timeout"] = std::to_string(timeout / 1000);
+	opts["timeout"] = std::to_string(timeout);
 
 	// create rtsp client and start playing the video
 	client_ = new source::RtspClient(rtsp_url_, opts, this);

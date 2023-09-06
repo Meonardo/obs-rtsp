@@ -94,6 +94,94 @@ std::vector<NaluIndex> FindNaluIndices(const uint8_t* buffer,
 NaluType ParseNaluType(uint8_t data) {
 	return static_cast<NaluType>(data & kNaluTypeMask);
 }
+
+// Utility function to decode unsigned exponential Golomb-coded values
+uint32_t uev_decode(const uint8_t* data, size_t dataSize, size_t& offset) {
+	uint32_t leadingZeros = 0;
+	while (offset < dataSize * 8 && !data[offset / 8] &&
+	       !(data[offset / 8 + 1] & (1 << (7 - offset % 8)))) {
+		++leadingZeros;
+		++offset;
+	}
+
+	if (offset >= dataSize * 8) {
+		blog(LOG_ERROR,
+		     "Error decoding exponential Golomb - coded value");
+		return 0;
+	}
+
+	uint32_t codeNum = 0;
+	for (int32_t i = leadingZeros; i >= 0; --i) {
+		if (offset >= dataSize * 8) {
+			blog(LOG_ERROR,
+			     "Error decoding exponential Golomb-coded value");
+			return 0;
+		}
+		codeNum |= ((data[offset / 8] >> (7 - offset % 8)) & 1) << i;
+		++offset;
+	}
+
+	return (1 << leadingZeros) - 1 + codeNum;
+}
+
+// Function to extract video resolution from SPS NALU buffer
+void GetVideoResolution(const uint8_t* data, size_t dataSize, int& width,
+			int& height) {
+	// Check for NALU start code (0x00000001 or 0x000001)
+	size_t startIndex = 0;
+	if (dataSize >= 3 && data[0] == 0x00 && data[1] == 0x00 &&
+	    (data[2] == 0x01 || (data[2] == 0x00 && data[3] == 0x01)))
+		startIndex = (data[2] == 0x01) ? 3 : 4;
+
+	// Find the SPS NALU header
+	size_t spsHeaderStartIndex = startIndex;
+	while (spsHeaderStartIndex < dataSize - 3 &&
+	       !(data[spsHeaderStartIndex] == 0x00 &&
+		 data[spsHeaderStartIndex + 1] == 0x00 &&
+		 (data[spsHeaderStartIndex + 2] == 0x01 ||
+		  (data[spsHeaderStartIndex + 2] == 0x00 &&
+		   data[spsHeaderStartIndex + 3] == 0x01)))) {
+		++spsHeaderStartIndex;
+	}
+
+	// Make sure SPS NALU is found and has correct type
+	if (spsHeaderStartIndex >= dataSize - 3 ||
+	    data[spsHeaderStartIndex + 2] != 0x07) {
+		blog(LOG_ERROR, "Invalid SPS NALU");
+		return;
+	}
+
+	// Parse SPS payload to extract resolution information
+	size_t offset = spsHeaderStartIndex + 4; // Start after NALU header
+	uint32_t picWidthInMbsMinus1 = 0, picHeightInMapUnitsMinus1 = 0;
+	uint32_t frameCropLeftOffset = 0, frameCropRightOffset = 0,
+		 frameCropTopOffset = 0, frameCropBottomOffset = 0;
+
+	// SPS parameters: profile_idc, constraint_set_flags, etc. (skip)
+	offset += 2;
+
+	// Get pic_width_in_mbs_minus1 and pic_height_in_map_units_minus1
+	picWidthInMbsMinus1 = uev_decode(data, dataSize, offset);
+	picHeightInMapUnitsMinus1 = uev_decode(data, dataSize, offset);
+
+	// Skip frame_mbs_only_flag, direct_8x8_inference_flag, etc.
+	offset += 5;
+
+	// Check for frame cropping information present
+	if (data[offset++] == 0x01) {
+		// Get frame cropping offsets
+		frameCropLeftOffset = uev_decode(data, dataSize, offset);
+		frameCropRightOffset = uev_decode(data, dataSize, offset);
+		frameCropTopOffset = uev_decode(data, dataSize, offset);
+		frameCropBottomOffset = uev_decode(data, dataSize, offset);
+	}
+
+	// Calculate video resolution
+	width = (picWidthInMbsMinus1 + 1) * 16 - frameCropLeftOffset * 2 -
+		frameCropRightOffset * 2;
+	height = (picHeightInMapUnitsMinus1 + 1) * 16 - frameCropTopOffset * 2 -
+		 frameCropBottomOffset * 2;
+}
 } // namespace utils::h264
 
 namespace source {
@@ -103,7 +191,8 @@ RtspClient::RtspClient(const std::string& uri,
   : observer_(observer),
     env_(nullptr),
     client_(nullptr),
-    uri_(uri) {
+    uri_(uri),
+    opts_(opts) {
 	Start();
 }
 
@@ -129,35 +218,32 @@ void RtspClient::CaptureThread() {
 }
 
 void RtspClient::Start() {
-  if (client_ != nullptr) {
-    return;
-  }
+	if (client_ != nullptr) {
+		return;
+	}
 
-  std::map<std::string, std::string> opts;
-  opts["timeout"] = "15";
+	env_ = new Environment;
+	client_ = new RTSPConnection(*env_, this, uri_.c_str(), opts_, 2);
+	capture_thread_ = std::thread(&RtspClient::CaptureThread, this);
 
-  env_ = new Environment;
-  client_ = new RTSPConnection(*env_, this, uri_.c_str(), opts, 2);
-  capture_thread_ = std::thread(&RtspClient::CaptureThread, this);
-
-  blog(LOG_INFO, "RTSP client started");
+	blog(LOG_INFO, "RTSP client started");
 }
 
 void RtspClient::Stop() {
-  if (env_ != nullptr) {
-    env_->stop();
-  }
-  capture_thread_.join();
+	if (env_ != nullptr) {
+		env_->stop();
+	}
+	capture_thread_.join();
 
-  if (client_ != nullptr) {
-    delete client_;
-    client_ = nullptr;
-  }
-  if (env_ != nullptr) {
-    delete env_;
-    env_ = nullptr;
-  }
-  blog(LOG_INFO, "RTSP client stopped");
+	if (client_ != nullptr) {
+		delete client_;
+		client_ = nullptr;
+	}
+	if (env_ != nullptr) {
+		delete env_;
+		env_ = nullptr;
+	}
+	blog(LOG_INFO, "RTSP client stopped");
 }
 
 bool RtspClient::onNewSession(const char* id, const char* media,
@@ -218,22 +304,19 @@ void RtspClient::ProcessBuffer(const char* id, unsigned char* buffer,
 					    buffer + index.payload_size +
 					      index.payload_start_offset -
 					      index.start_offset);
-				/*size_t w, h;
-        bool ret = libwebrtc::RTCUtils::
-                ParseH264SizeInfoFromSPSNALU(
-                        buffer +
-                                index.payload_start_offset,
-                        index.payload_size, &w,
-                        &h);
-        if (ret) {
-                width_ = w;
-                height_ = h;
+				int w = 0, h = 0;
+				utils::h264::GetVideoResolution(
+				  buffer + index.payload_start_offset,
+				  index.payload_size, w, h);
+				if (width_ && height_) {
+					width_ = w;
+					height_ = h;
 
-                blog(LOG_INFO,
-                     "Parse video resolution, width: %d, height: %d",
-                     w, h);
-        }*/
-
+					blog(
+					  LOG_INFO,
+					  "Parse video resolution, width: %d, height: %d",
+					  w, h);
+				}
 			} else if (nalu_type == utils::h264::NaluType::kPps) {
 				// blog(LOG_INFO, "PPS NALU");
 
