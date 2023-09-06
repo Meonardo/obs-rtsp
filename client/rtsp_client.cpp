@@ -100,18 +100,19 @@ namespace source {
 RtspClient::RtspClient(const std::string& uri,
 		       const std::map<std::string, std::string>& opts,
 		       RTSPClientObserver* observer)
-  : stop_(0),
-    client_(env_, this, uri.c_str(), opts, 2),
-    observer_(observer) {
-	this->Start();
+  : observer_(observer),
+    env_(nullptr),
+    client_(nullptr),
+    uri_(uri) {
+	Start();
 }
 
 RtspClient::~RtspClient() {
-	this->Stop();
+	Stop();
 }
 
 bool RtspClient::IsRunning() {
-	return (stop_ == 0);
+	return (client_ != nullptr);
 }
 
 uint32_t RtspClient::GetWidth() const {
@@ -124,18 +125,39 @@ uint32_t RtspClient::GetHeight() const {
 
 void RtspClient::CaptureThread() {
 	SetThreadDescription(GetCurrentThread(), L"rtsp_capture_thread");
-	env_.mainloop();
+	env_->mainloop();
 }
 
 void RtspClient::Start() {
-	blog(LOG_INFO, "RTSP client started");
-	capture_thread_ = std::thread(&RtspClient::CaptureThread, this);
+  if (client_ != nullptr) {
+    return;
+  }
+
+  std::map<std::string, std::string> opts;
+  opts["timeout"] = "15";
+
+  env_ = new Environment;
+  client_ = new RTSPConnection(*env_, this, uri_.c_str(), opts, 2);
+  capture_thread_ = std::thread(&RtspClient::CaptureThread, this);
+
+  blog(LOG_INFO, "RTSP client started");
 }
 
 void RtspClient::Stop() {
-	blog(LOG_INFO, "RTSP client stopped");
-	env_.stop();
-	capture_thread_.join();
+  if (env_ != nullptr) {
+    env_->stop();
+  }
+  capture_thread_.join();
+
+  if (client_ != nullptr) {
+    delete client_;
+    client_ = nullptr;
+  }
+  if (env_ != nullptr) {
+    delete env_;
+    env_ = nullptr;
+  }
+  blog(LOG_INFO, "RTSP client stopped");
 }
 
 bool RtspClient::onNewSession(const char* id, const char* media,

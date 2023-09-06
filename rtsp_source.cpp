@@ -157,7 +157,6 @@ bool RtspSource::OnApplyBtnClicked(obs_properties_t* props,
 	blog(LOG_INFO, "play rtsp source url: %s", rtsp_url_.c_str());
 
 	if (client_) {
-		client_->Stop();
 		delete client_;
 		client_ = nullptr;
 	}

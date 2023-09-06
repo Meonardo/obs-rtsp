@@ -54,14 +54,10 @@ public:
 	virtual void onDataTimeout(RTSPConnection& connection) override;
 
 private:
-	char stop_;
-	Environment env_;
 	RTSPClientObserver* observer_;
-
-protected:
-	RTSPConnection client_;
-
-private:
+  Environment* env_;
+  RTSPConnection* client_;
+  std::string uri_;
 	std::thread capture_thread_;
 	std::map<std::string, std::string> codec_;
 	std::vector<uint8_t> cfg_;
