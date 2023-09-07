@@ -35,6 +35,10 @@ target_sources(
   rtsp_source.h
   rtsp_source.cpp
 
+  # utils
+  utils/h264/h264_common.h
+  utils/h264/h264_common.cpp
+
   # server
 
   # client

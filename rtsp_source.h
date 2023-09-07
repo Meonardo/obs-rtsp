@@ -27,16 +27,12 @@ public:
 	// obs-source related functions end
 
 	// the `Apply` button events from properties setting window(UI)
-	bool OnApplyBtnClicked(obs_properties_t* props,
-			       obs_property_t* property);
+	bool OnApplyBtnClicked(obs_properties_t* props, obs_property_t* property);
 
 	// overrides begin
-	virtual void OnSessionStarted(const char* id, const char* media,
-				      const char* codec,
-				      const char* sdp) override;
+	virtual void OnSessionStarted(const char* id, const char* media, const char* codec, const char* sdp) override;
 	virtual void OnSessionStopped(const char* msg) override;
-	virtual void OnData(unsigned char* buffer, ssize_t size,
-			    struct timeval presentationTime) override;
+	virtual void OnData(unsigned char* buffer, ssize_t size, struct timeval presentationTime) override;
 	virtual void OnError(const char* msg) override;
 	// overrides end
 
