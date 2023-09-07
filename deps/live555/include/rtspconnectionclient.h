@@ -94,7 +94,11 @@ class RTSPConnection
 			public:
 				RTSPClientConnection(RTSPConnection& connection, Environment& env, Callback* callback, const char* rtspURL, int timeout, int rtptransport, int verbosityLevel = 0);
 				virtual ~RTSPClientConnection(); 
-			
+      
+        MediaSubsession* getMediaSubSession() {
+          return m_subSession;
+        }
+
 			protected:
 				void sendNextCommand(); 
 				void setNptstartTime();
@@ -131,6 +135,7 @@ class RTSPConnection
 		void        start(unsigned int delay = 0);
 		std::string getUrl()          { return m_url; }
 		int         getRtpTransport() { return m_rtptransport; }
+    const char* getFmtpSpropParametersSets() { return m_rtspClient->getMediaSubSession()->fmtp_spropparametersets(); }
 
 	protected:
 		TASK_CALLBACK(RTSPConnection,startCallback);
