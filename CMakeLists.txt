@@ -6,6 +6,16 @@ if(NOT ENABLE_RTSP)
   return()
 endif()
 
+find_package(
+  FFmpeg REQUIRED
+  COMPONENTS avcodec
+             avfilter
+             avdevice
+             avutil
+             swscale
+             avformat
+             swresample)
+
 add_library(obs-rtsp MODULE)
 add_library(OBS::rtsp ALIAS obs-rtsp)
 
@@ -36,6 +46,8 @@ target_sources(
   rtsp_source.cpp
 
   # utils
+  utils/utils.h
+  utils/utils.cpp
   utils/h264/h264_common.h
   utils/h264/h264_common.cpp
 
@@ -52,6 +64,15 @@ target_link_libraries(
 
   OBS::libobs
   liblive555helper
+
+  # ffmpeg
+  FFmpeg::avcodec
+  FFmpeg::avfilter
+  FFmpeg::avformat
+  FFmpeg::avdevice
+  FFmpeg::avutil
+  FFmpeg::swscale
+  FFmpeg::swresample
 )
 
 set_target_properties_obs(obs-rtsp PROPERTIES FOLDER plugins/obs-rtsp PREFIX "")
