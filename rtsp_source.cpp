@@ -1,30 +1,29 @@
 #include "rtsp_source.h"
 
-#include <regex>
-#include <string>
-#include <tuple>
+#include "utils/utils.h"
 
-namespace utils {
-// extract username, password and rtsp url from rtsp url
-std::tuple<std::string, std::string, std::string> ExtractRtspUrl(const std::string& url) {
-	std::regex pattern(
-	  "^(rtsp|rtsps):\\/\\/(?:([a-zA-Z0-9]+):([a-zA-Z0-9]+)@)?([a-zA-Z0-9.-]+)(?::([0-9]+))?\\/(.+)$");
-	std::smatch matches;
-	if (std::regex_search(url, matches, pattern)) {
-		std::string rtspUri = matches[1].str() + "://" + matches[4].str();
-		if (matches[5].matched) {
-			rtspUri += ":" + matches[5].str();
-		}
-		rtspUri += "/" + matches[6].str();
-		if (matches[2].matched && matches[3].matched) {
-			return std::make_tuple(matches[2].str(), matches[3].str(), rtspUri);
-		} else {
-			return std::make_tuple("", "", rtspUri);
-		}
-	}
-	return std::make_tuple("", "", "");
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4244)
+#pragma warning(disable : 4204)
+#endif
+
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
+#include <util/threading.h>
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+
+#ifdef __cplusplus
 }
-} // namespace utils
+#endif
 
 RtspSource::RtspSource(obs_data_t* settings, obs_source_t* source)
   : settings_(settings),
@@ -43,7 +42,36 @@ RtspSource::~RtspSource() {
 	}
 }
 
-void RtspSource::Update(obs_data_t* settings) {}
+void RtspSource::Update(obs_data_t* settings) {
+  std::string url = obs_data_get_string(settings_, "url");
+	if (url != rtsp_url_) {
+    if (url.empty()) {
+      blog(LOG_ERROR, "RTSP url is empty");
+      return;
+    }
+
+    auto [username, password, rtsp] = utils::ExtractRtspUrl(url);
+    if (rtsp.empty()) {
+      blog(LOG_ERROR, "Current RTSP url(%s) is invalidate", url.c_str());
+      return;
+    }
+
+    rtsp_url_ = rtsp;
+    blog(LOG_INFO, "play rtsp source url: %s", rtsp_url_.c_str());
+
+    if (client_) {
+      delete client_;
+      client_ = nullptr;
+    }
+
+    uint64_t timeout = obs_data_get_int(settings_, "restart_timeout");
+    std::map<std::string, std::string> opts;
+    opts["timeout"] = std::to_string(timeout);
+
+    // create rtsp client and start playing the video
+    client_ = new source::RtspClient(rtsp_url_, opts, this);
+	}
+}
 
 void RtspSource::GetDefaults(obs_data_t* settings) {
 	obs_data_set_default_string(settings, "url", "rtsp://");
@@ -52,9 +80,7 @@ void RtspSource::GetDefaults(obs_data_t* settings) {
 	obs_data_set_default_int(settings, "restart_timeout", 20);
 	obs_data_set_default_bool(settings, "block_video", false);
 	obs_data_set_default_bool(settings, "block_audio", false);
-	obs_data_set_default_bool(settings, "drop_video", false);
-	obs_data_set_default_bool(settings, "drop_audio", false);
-	obs_data_set_default_bool(settings, "clear_on_end", true);
+  obs_data_set_default_bool(settings, "hw_decode", true);
 }
 
 obs_properties* RtspSource::GetProperties() {
@@ -68,11 +94,9 @@ obs_properties* RtspSource::GetProperties() {
 	obs_properties_add_bool(props, "restart_on_error", "Try to restart after pipeline encountered an error");
 	obs_properties_add_int(props, "restart_timeout", "Error timeout seconds", 0, 20, 1);
 	obs_properties_add_bool(props, "stop_on_hide", "Stop pipeline when hidden");
-	obs_properties_add_bool(props, "clear_on_end", "Clear image data after end-of-stream or error");
 	obs_properties_add_bool(props, "block_video", "Disable video sink buffer");
-	obs_properties_add_bool(props, "drop_video", "Drop video when sink is not fast enough");
 	obs_properties_add_bool(props, "block_audio", "Disable audio sink buffer");
-	obs_properties_add_bool(props, "drop_audio", "Drop audio when sink is not fast enough");
+  obs_properties_add_bool(props, "hw_decode", "Use hardware decode");
 
 	obs_properties_add_button2(
 	  props, "apply", "Apply",

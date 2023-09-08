@@ -75,7 +75,7 @@ bool RtspClient::onNewSession(const char* id, const char* media, const char* cod
 			codec_[id] = codec;
 			success = true;
 
-      // try to retrieve video resolution from sdp
+			// try to retrieve video resolution from sdp
 			auto sps_base64 = client_->getFmtpSpropParametersSets();
 			blog(LOG_INFO, "sps in base64: %s", sps_base64);
 			if (strlen(sps_base64)) {
