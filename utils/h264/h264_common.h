@@ -7,6 +7,9 @@
 #include <bitset>
 #include <vector>
 
+// this file is heavily brorrowed from chromium project
+// please see: https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/common_video/h264/h264_common.h
+
 namespace utils::h264 {
 // The size of a full NALU start sequence {0 0 0 1}, used for the first NALU
 // of an access unit, and for SPS and PPS blocks.
