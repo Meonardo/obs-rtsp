@@ -95,6 +95,9 @@ bool RtspClient::onNewSession(const char* id, const char* media, const char* cod
 			}
 		}
 	}
+
+  observer_->OnSessionStarted(id, media, codec, sdp);
+
 	return success;
 }
 

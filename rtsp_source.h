@@ -3,6 +3,23 @@
 #include "client/rtsp_client.h"
 #include <string>
 
+extern "C" {
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4244)
+#pragma warning(disable : 4204)
+#endif
+
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
+#include <libavutil/mastering_display_metadata.h>
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+}
+
 class RtspSource : public source::RTSPClientObserver {
 public:
 	RtspSource(obs_data_t* settings, obs_source_t* source);
@@ -42,6 +59,23 @@ private:
 
 	std::string rtsp_url_;
 	source::RtspClient* client_;
+
+  // FFmpeg
+  AVFormatContext* fmt_ctx_;
+  AVFrame* in_frame_;
+  AVFrame* sw_frame_;
+  AVFrame* hw_frame_;
+  AVPacket* pkt_;
+	// Decoding
+	AVCodecContext* codec_ctx_;
+	AVBufferRef* hw_ctx_;
+  const AVCodec* codec_;
+  AVPixelFormat hw_format_;
+  bool hw_decoder_available_;
+
+  bool InitFFmpegFormat(const char* codec, bool video, bool hw_decode);
+	bool HardwareFormatTypeAvailable(const AVCodec* codec, AVHWDeviceType type);
+	void InitHardwareDecoder(const AVCodec* codec);
 };
 
 void register_rtsp_source();
