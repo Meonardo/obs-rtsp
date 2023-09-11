@@ -73,18 +73,18 @@ bool RtspClient::onNewSession(const char* id, const char* media, const char* cod
 		blog(LOG_INFO, "New session created: id: %s, media: %s, codec: %s, sdp: %s", id,
 		     media, codec, sdp);
 
-		if ((strcmp(codec, "H264") == 0)) { // only support H.264 codec
-			codec_[id] = codec;
-			success = true;
+		codec_[id] = codec;
+		success = true;
 
-			// try to retrieve video resolution from sdp
-			auto sps_base64 = client_->getFmtpSpropParametersSets();
-			blog(LOG_INFO, "sps in base64: %s", sps_base64);
-			if (strlen(sps_base64)) {
-				int width = 0, height = 0;
-				unsigned result_size = 0;
-				unsigned char* sps = base64Decode(sps_base64, result_size, true);
+		// try to retrieve video resolution from sdp
+		auto sps_base64 = client_->getFmtpSpropParametersSets();
+		blog(LOG_INFO, "sps in base64: %s", sps_base64);
+		if (strlen(sps_base64)) {
+			int width = 0, height = 0;
+			unsigned result_size = 0;
+			unsigned char* sps = base64Decode(sps_base64, result_size, true);
 
+			if (strcmp(codec, "h264") == 0) {
 				utils::h264::SpsNalu sps_nalu;
 				std::vector<uint8_t> sps_nalu_data(sps, sps + result_size);
 				auto ret =
@@ -128,7 +128,7 @@ void RtspClient::onDataTimeout(RTSPConnection& connection) {
 void RtspClient::ProcessBuffer(const char* id, unsigned char* buffer, ssize_t size,
 			       struct timeval presentationTime) {
 	std::string codec = codec_[id];
-	if (codec == "H264") {
+	if (codec == "H264" || codec == "H265" || codec == "HEVC") {
 		observer_->OnData(buffer, size, presentationTime);
 		//std::vector<utils::h264::NaluIndex> indexes = utils::h264::FindNaluIndices(buffer, size);
 

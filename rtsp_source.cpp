@@ -21,7 +21,7 @@ static inline video_format convert_pixel_format(int f) {
 	switch (f) {
 	case AV_PIX_FMT_NONE: return VIDEO_FORMAT_NONE;
 	case AV_PIX_FMT_YUV420P: return VIDEO_FORMAT_I420;
-  case AV_PIX_FMT_YUVJ420P: return VIDEO_FORMAT_I420;
+	case AV_PIX_FMT_YUVJ420P: return VIDEO_FORMAT_I420;
 	case AV_PIX_FMT_YUYV422: return VIDEO_FORMAT_YUY2;
 	case AV_PIX_FMT_YUV422P: return VIDEO_FORMAT_I422;
 	case AV_PIX_FMT_YUV422P10LE: return VIDEO_FORMAT_I210;
@@ -105,8 +105,8 @@ RtspSource::RtspSource(obs_data_t* settings, obs_source_t* source)
 
 	blog(LOG_INFO, "play rtsp source url: %s", url);
 
-  // try to play the RTSP stream
-  PrepareToPlay();
+	// try to play the RTSP stream
+	PrepareToPlay();
 }
 
 RtspSource::~RtspSource() {
@@ -114,15 +114,15 @@ RtspSource::~RtspSource() {
 		delete client_;
 		client_ = nullptr;
 	}
-  // release ffmpeg stuff
-  DestoryFFmpeg();
+	// release ffmpeg stuff
+	DestoryFFmpeg();
 }
 
 void RtspSource::Update(obs_data_t* settings) {
 	std::string url = obs_data_get_string(settings_, "url");
-  bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
+	bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
 	if (url != rtsp_url_ || hw_decode != hw_decoder_available_) {
-    PrepareToPlay();
+		PrepareToPlay();
 	}
 }
 
@@ -205,36 +205,36 @@ bool RtspSource::OnApplyBtnClicked(obs_properties_t* props, obs_property_t* prop
 }
 
 bool RtspSource::PrepareToPlay() {
-  std::string url = obs_data_get_string(settings_, "url");
-  if (url.empty()) {
-    blog(LOG_ERROR, "RTSP url is empty");
-    return false;
-  }
+	std::string url = obs_data_get_string(settings_, "url");
+	if (url.empty()) {
+		blog(LOG_ERROR, "RTSP url is empty");
+		return false;
+	}
 
-  auto [username, password, rtsp] = utils::ExtractRtspUrl(url);
-  if (rtsp.empty()) {
-    blog(LOG_ERROR, "Current RTSP url(%s) is invalid", url.c_str());
-    return false;
-  }
+	auto [username, password, rtsp] = utils::ExtractRtspUrl(url);
+	if (rtsp.empty()) {
+		blog(LOG_ERROR, "Current RTSP url(%s) is invalid", url.c_str());
+		return false;
+	}
 
-  rtsp_url_ = rtsp;
-  blog(LOG_INFO, "play rtsp source url: %s", rtsp_url_.c_str());
+	rtsp_url_ = rtsp;
+	blog(LOG_INFO, "play rtsp source url: %s", rtsp_url_.c_str());
 
-  if (client_) {
-    delete client_;
-    client_ = nullptr;
-  }
+	if (client_) {
+		delete client_;
+		client_ = nullptr;
+	}
 
-  DestoryFFmpeg();
+	DestoryFFmpeg();
 
-  uint64_t timeout = obs_data_get_int(settings_, "restart_timeout");
-  std::map<std::string, std::string> opts;
-  opts["timeout"] = std::to_string(timeout);
+	uint64_t timeout = obs_data_get_int(settings_, "restart_timeout");
+	std::map<std::string, std::string> opts;
+	opts["timeout"] = std::to_string(timeout);
 
-  // create rtsp client and start playing the video
-  client_ = new source::RtspClient(rtsp_url_, opts, this);
+	// create rtsp client and start playing the video
+	client_ = new source::RtspClient(rtsp_url_, opts, this);
 
-  return true;
+	return true;
 }
 
 // override methods
@@ -278,7 +278,7 @@ void RtspSource::OnData(unsigned char* buffer, ssize_t size, struct timeval time
 	// send the packet to decoder
 	auto ret = avcodec_send_packet(codec_ctx_, pkt_);
 	if (ret < 0) {
-		blog(LOG_ERROR, "error sending a packet for decoding, error: %s", av_err2str(ret));
+		blog(LOG_INFO, "error sending a packet for decoding, error: %s", av_err2str(ret));
 		av_packet_unref(pkt_);
 		return;
 	}
@@ -288,7 +288,7 @@ void RtspSource::OnData(unsigned char* buffer, ssize_t size, struct timeval time
 	if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
 		return;
 	} else if (ret < 0) {
-		blog(LOG_ERROR, "error during decoding, error: %s\n", av_err2str(ret));
+		blog(LOG_INFO, "error during decoding, error: %s\n", av_err2str(ret));
 		av_packet_unref(pkt_);
 		return;
 	}
@@ -384,8 +384,8 @@ void RtspSource::DestoryFFmpeg() {
 		av_frame_free(&hw_frame_);
 		hw_frame_ = nullptr;
 	}
-  in_frame_ = nullptr;
-  hw_decoder_available_ = false;
+	in_frame_ = nullptr;
+	hw_decoder_available_ = false;
 
 	if (pkt_ != nullptr) {
 		av_packet_free(&pkt_);
@@ -409,8 +409,16 @@ bool RtspSource::InitFFmpeg(const char* codec, bool video) {
 	auto transform = utils::string::ToLower(codec);
 	codec_ = avcodec_find_decoder_by_name(transform.c_str());
 	if (codec_ == nullptr) {
-		blog(LOG_ERROR, "AVCodec init failed");
-		return false;
+		if (transform == "h265") { // compare with the codec name again if not found
+			codec_ = avcodec_find_decoder(AV_CODEC_ID_HEVC);
+      if (codec_ == nullptr) {
+        blog(LOG_ERROR, "AVCodec init failed");
+        return false;
+      }
+		} else {
+			blog(LOG_ERROR, "AVCodec init failed");
+			return false;
+		}
 	}
 	codec_ctx_ = avcodec_alloc_context3(codec_);
 	if (codec_ctx_ == nullptr) {
@@ -418,7 +426,7 @@ bool RtspSource::InitFFmpeg(const char* codec, bool video) {
 		return false;
 	}
 
-  bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
+	bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
 	if (hw_decode) { // init hardware decoder
 		InitHardwareDecoder(codec_);
 	}
