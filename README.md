@@ -4,7 +4,7 @@
 
 ## Motivation
 1. there is a delay issue with `Media Source` in OBS, even I set the `network buffering` to zero;
-2. `obs-gstreamer` is great plugin, I can add RTSP URI as a source and play it with an ideal delay, but I have to include tons of the gstreamer lib dependencies, it's pain;
+2. `obs-gstreamer` is an great [plugin](https://github.com/fzwoch/obs-gstreamer), I can add RTSP URI as a source and play it with an ideal delay, but I have to include tons of the gstreamer lib dependencies, it's pain;
 
 ## Status
 - Video:
@@ -14,3 +14,6 @@
   - WIP
 - RTSP server:
   - WIP  
+
+## Credit
+- `liblive555helper` is heavily brorrowed from [mpromonet/live555helper](https://github.com/mpromonet/live555helper);
