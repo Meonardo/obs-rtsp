@@ -56,7 +56,8 @@ static inline audio_format convert_sample_format(int f) {
 	return AUDIO_FORMAT_UNKNOWN;
 }
 
-static inline video_colorspace convert_color_space(AVColorSpace s, AVColorTransferCharacteristic trc,
+static inline video_colorspace convert_color_space(AVColorSpace s,
+						   AVColorTransferCharacteristic trc,
 						   AVColorPrimaries color_primaries) {
 	switch (s) {
 	case AVCOL_SPC_BT709: return (trc == AVCOL_TRC_IEC61966_2_1) ? VIDEO_CS_SRGB : VIDEO_CS_709;
@@ -64,7 +65,8 @@ static inline video_colorspace convert_color_space(AVColorSpace s, AVColorTransf
 	case AVCOL_SPC_BT470BG:
 	case AVCOL_SPC_SMPTE170M:
 	case AVCOL_SPC_SMPTE240M: return VIDEO_CS_601;
-	case AVCOL_SPC_BT2020_NCL: return (trc == AVCOL_TRC_ARIB_STD_B67) ? VIDEO_CS_2100_HLG : VIDEO_CS_2100_PQ;
+	case AVCOL_SPC_BT2020_NCL:
+		return (trc == AVCOL_TRC_ARIB_STD_B67) ? VIDEO_CS_2100_HLG : VIDEO_CS_2100_PQ;
 	default:
 		return (color_primaries == AVCOL_PRI_BT2020)
 			 ? ((trc == AVCOL_TRC_ARIB_STD_B67) ? VIDEO_CS_2100_HLG : VIDEO_CS_2100_PQ)
@@ -77,8 +79,9 @@ static inline video_range_type convert_color_range(AVColorRange r) {
 }
 
 enum AVHWDeviceType hw_priority[] = {
-  AV_HWDEVICE_TYPE_D3D11VA, AV_HWDEVICE_TYPE_DXVA2, AV_HWDEVICE_TYPE_CUDA,         AV_HWDEVICE_TYPE_VAAPI,
-  AV_HWDEVICE_TYPE_VDPAU,   AV_HWDEVICE_TYPE_QSV,   AV_HWDEVICE_TYPE_VIDEOTOOLBOX, AV_HWDEVICE_TYPE_NONE,
+  AV_HWDEVICE_TYPE_D3D11VA,      AV_HWDEVICE_TYPE_DXVA2, AV_HWDEVICE_TYPE_CUDA,
+  AV_HWDEVICE_TYPE_VAAPI,        AV_HWDEVICE_TYPE_VDPAU, AV_HWDEVICE_TYPE_QSV,
+  AV_HWDEVICE_TYPE_VIDEOTOOLBOX, AV_HWDEVICE_TYPE_NONE,
 };
 
 RtspSource::RtspSource(obs_data_t* settings, obs_source_t* source)
@@ -96,6 +99,9 @@ RtspSource::RtspSource(obs_data_t* settings, obs_source_t* source)
     codec_(nullptr) {
 	auto url = obs_data_get_string(settings, "url");
 	rtsp_url_ = url;
+	hw_decoder_available_ = false;
+	media_state_ = OBS_MEDIA_STATE_NONE;
+
 	blog(LOG_INFO, "play rtsp source url: %s", url);
 }
 
@@ -155,7 +161,8 @@ obs_properties* RtspSource::GetProperties() {
 	obs_property_t* prop = obs_properties_add_text(props, "url", "RTSP URL", OBS_TEXT_DEFAULT);
 	obs_property_set_long_description(prop, "Specify the RTSP URL to play.");
 
-	obs_properties_add_bool(props, "restart_on_error", "Try to restart after pipeline encountered an error");
+	obs_properties_add_bool(props, "restart_on_error",
+				"Try to restart after pipeline encountered an error");
 	obs_properties_add_int(props, "restart_timeout", "Error timeout seconds", 0, 20, 1);
 	obs_properties_add_bool(props, "stop_on_hide", "Stop pipeline when hidden");
 	obs_properties_add_bool(props, "block_video", "Disable video sink buffer");
@@ -182,7 +189,7 @@ int64_t RtspSource::GetDuration() {
 }
 
 enum obs_media_state RtspSource::GetState() {
-	return OBS_MEDIA_STATE_NONE;
+	return media_state_;
 }
 
 uint32_t RtspSource::GetWidth() {
@@ -242,7 +249,8 @@ bool RtspSource::OnApplyBtnClicked(obs_properties_t* props, obs_property_t* prop
 }
 
 // override methods
-void RtspSource::OnSessionStarted(const char* id, const char* media, const char* codec, const char* sdp) {
+void RtspSource::OnSessionStarted(const char* id, const char* media, const char* codec,
+				  const char* sdp) {
 	blog(LOG_INFO, "RTSP session started");
 	if (strcmp(media, "video") == 0) {
 		bool ret = InitFFmpegFormat(codec, true, true);
@@ -251,14 +259,18 @@ void RtspSource::OnSessionStarted(const char* id, const char* media, const char*
 			return;
 		}
 	}
+
+	media_state_ = OBS_MEDIA_STATE_PLAYING;
 }
 
 void RtspSource::OnSessionStopped(const char* msg) {
 	blog(LOG_INFO, "RTSP session stopped, message: %s", msg);
+	media_state_ = OBS_MEDIA_STATE_STOPPED;
 }
 
 void RtspSource::OnError(const char* msg) {
 	blog(LOG_INFO, "RTSP session error, message: %s", msg);
+	media_state_ = OBS_MEDIA_STATE_STOPPED;
 }
 
 void RtspSource::OnData(unsigned char* buffer, ssize_t size, struct timeval time) {
@@ -271,14 +283,13 @@ void RtspSource::OnData(unsigned char* buffer, ssize_t size, struct timeval time
 		return;
 	}
 
-	// create packet here
 	pkt_->data = buffer;
-	pkt_->size = size;
+	pkt_->size = (int)size;
 
 	// send the packet to decoder
 	auto ret = avcodec_send_packet(codec_ctx_, pkt_);
 	if (ret < 0) {
-		blog(LOG_ERROR, "error sending a packet for decoding, error: %s\n", av_err2str(ret));
+		blog(LOG_ERROR, "error sending a packet for decoding, error: %s", av_err2str(ret));
 		av_packet_unref(pkt_);
 		return;
 	}
@@ -293,23 +304,59 @@ void RtspSource::OnData(unsigned char* buffer, ssize_t size, struct timeval time
 		return;
 	}
 
-	hw_frame_->format = AV_PIX_FMT_YUV420P;
-	obs_source_frame* frame = obs_source_frame_create(VIDEO_FORMAT_I420, hw_frame_->width, hw_frame_->height);
-	if (frame == nullptr) {
+	ret = av_hwframe_transfer_data(sw_frame_, hw_frame_, 0);
+	if (ret != 0) {
+		blog(LOG_ERROR, "error transfer data from hw frame to sw frame, error: %s\n",
+		     av_err2str(ret));
+		return;
+	}
+	sw_frame_->color_range = hw_frame_->color_range;
+	sw_frame_->color_primaries = hw_frame_->color_primaries;
+	sw_frame_->color_trc = hw_frame_->color_trc;
+	sw_frame_->colorspace = hw_frame_->colorspace;
+
+	auto format = convert_pixel_format(sw_frame_->format);
+	if (format == VIDEO_FORMAT_NONE) {
+		blog(LOG_ERROR, "video format is none?");
 		return;
 	}
 
-	bool flip = hw_frame_->linesize[0] < 0 && hw_frame_->linesize[1] == 0;
+	obs_source_frame* frame = &obs_frame_;
+
 	for (size_t i = 0; i < MAX_AV_PLANES; i++) {
-		frame->data[i] = hw_frame_->data[i];
-		frame->linesize[i] = abs(hw_frame_->linesize[i]);
+		frame->data[i] = sw_frame_->data[i];
+		frame->linesize[i] = abs(sw_frame_->linesize[i]);
 	}
-	if (flip)
-		frame->data[0] -= frame->linesize[0] * ((size_t)hw_frame_->height - 1);
 
-	frame->format = convert_pixel_format(hw_frame_->format);
+	frame->format = format;
+	frame->width = sw_frame_->width;
+	frame->height = sw_frame_->height;
+	frame->timestamp = time.tv_sec;
+	frame->flip = false;
 
-	switch (hw_frame_->color_trc) {
+	auto color_space = convert_color_space(sw_frame_->colorspace, sw_frame_->color_trc,
+					       sw_frame_->color_primaries);
+	auto color_range = convert_color_range(sw_frame_->color_range);
+	frame->full_range = color_range;
+
+	if (color_space != color_space_ || format != video_format_) {
+		bool success = video_format_get_parameters_for_format(color_space, color_range,
+								      format, frame->color_matrix,
+								      frame->color_range_min,
+								      frame->color_range_max);
+		color_space_ = color_space;
+		video_format_ = format;
+		if (!success) {
+			frame->format = VIDEO_FORMAT_NONE;
+			return;
+		}
+	}
+	if (frame->format == VIDEO_FORMAT_NONE) {
+		blog(LOG_ERROR, "video format is none?");
+		return;
+	}
+
+	switch (sw_frame_->color_trc) {
 	case AVCOL_TRC_BT709:
 	case AVCOL_TRC_GAMMA22:
 	case AVCOL_TRC_GAMMA28:
@@ -321,10 +368,8 @@ void RtspSource::OnData(unsigned char* buffer, ssize_t size, struct timeval time
 	default: frame->trc = VIDEO_TRC_DEFAULT;
 	}
 
-	frame->flip = flip;
-
+	// send to obs
 	obs_source_output_video(source_, frame);
-	obs_source_frame_destroy(frame);
 }
 
 bool RtspSource::InitFFmpegFormat(const char* codec, bool video, bool hw_decode) {
@@ -335,7 +380,8 @@ bool RtspSource::InitFFmpegFormat(const char* codec, bool video, bool hw_decode)
 		return false;
 	}
 	// find the target codec and init codec context
-	codec_ = avcodec_find_decoder(AV_CODEC_ID_H264);
+	auto transform = utils::string::ToLower(codec);
+	codec_ = avcodec_find_decoder_by_name(transform.c_str());
 	if (codec_ == nullptr) {
 		blog(LOG_ERROR, "AVCodec init failed");
 		return false;
@@ -358,18 +404,18 @@ bool RtspSource::InitFFmpegFormat(const char* codec, bool video, bool hw_decode)
 		return false;
 	}
 
-	// init frame
-	if (hw_decode) {
+	// init frames
+	sw_frame_ = av_frame_alloc();
+	if (sw_frame_ == nullptr) {
+		blog(LOG_ERROR, "AVFrame init failed(software)");
+		avcodec_free_context(&codec_ctx_);
+		return false;
+	}
+
+	if (hw_decode) { // init hardware frame if necessary
 		hw_frame_ = av_frame_alloc();
 		if (hw_frame_ == nullptr) {
 			blog(LOG_ERROR, "AVFrame init failed(hardware)");
-			avcodec_free_context(&codec_ctx_);
-			return false;
-		}
-	} else {
-		sw_frame_ = av_frame_alloc();
-		if (sw_frame_ == nullptr) {
-			blog(LOG_ERROR, "AVFrame init failed(software)");
 			avcodec_free_context(&codec_ctx_);
 			return false;
 		}
@@ -388,7 +434,8 @@ bool RtspSource::HardwareFormatTypeAvailable(const AVCodec* c, AVHWDeviceType ty
 			break;
 		}
 
-		if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX && config->device_type == type) {
+		if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
+		    config->device_type == type) {
 			hw_format_ = config->pix_fmt;
 			return true;
 		}
@@ -424,8 +471,8 @@ void register_rtsp_source() {
 
 	info.id = "rtsp_source";
 	info.type = OBS_SOURCE_TYPE_INPUT;
-	info.output_flags = OBS_SOURCE_ASYNC_VIDEO | OBS_SOURCE_AUDIO | OBS_SOURCE_DO_NOT_DUPLICATE |
-			    OBS_SOURCE_CONTROLLABLE_MEDIA;
+	info.output_flags = OBS_SOURCE_ASYNC_VIDEO | OBS_SOURCE_AUDIO |
+			    OBS_SOURCE_DO_NOT_DUPLICATE | OBS_SOURCE_CONTROLLABLE_MEDIA;
 	info.get_name = [](void*) -> const char* {
 		return "RTSP Source";
 	};
@@ -477,6 +524,7 @@ void register_rtsp_source() {
 	info.media_set_time = [](void* priv_data, int64_t ms) {
 		static_cast<RtspSource*>(priv_data)->SetTime(ms);
 	};
+	info.icon_type = OBS_ICON_TYPE_MEDIA;
 
 	obs_register_source(&info);
 }

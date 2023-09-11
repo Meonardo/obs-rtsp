@@ -69,7 +69,8 @@ std::vector<NaluIndex> FindNaluIndices(const uint8_t* buffer, size_t buffer_size
 	if (buffer_size < kNaluShortStartSequenceSize)
 		return sequences;
 
-	static_assert(kNaluShortStartSequenceSize >= 2, "kNaluShortStartSequenceSize must be larger or equals to 2");
+	static_assert(kNaluShortStartSequenceSize >= 2,
+		      "kNaluShortStartSequenceSize must be larger or equals to 2");
 	const size_t end = buffer_size - kNaluShortStartSequenceSize;
 	for (size_t i = 0; i < end;) {
 		if (buffer[i + 2] > 1) {
@@ -84,7 +85,8 @@ std::vector<NaluIndex> FindNaluIndices(const uint8_t* buffer, size_t buffer_size
 				// Update length of previous entry.
 				auto it = sequences.rbegin();
 				if (it != sequences.rend())
-					it->payload_size = index.start_offset - it->payload_start_offset;
+					it->payload_size =
+					  index.start_offset - it->payload_start_offset;
 
 				sequences.push_back(index);
 			}
@@ -162,9 +164,9 @@ int ParseVideoResolution(const std::vector<uint8_t>& data, SpsNalu& sps) {
 	sps.id = exp_golomb.ReadUE();
 	sps.separate_colour_plane_flag = 0;
 
-	if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 || profile_idc == 244 || profile_idc == 44 ||
-	    profile_idc == 83 || profile_idc == 86 || profile_idc == 118 || profile_idc == 128 || profile_idc == 138 ||
-	    profile_idc == 139 || profile_idc == 134) {
+	if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 || profile_idc == 244 ||
+	    profile_idc == 44 || profile_idc == 83 || profile_idc == 86 || profile_idc == 118 ||
+	    profile_idc == 128 || profile_idc == 138 || profile_idc == 139 || profile_idc == 134) {
 		uint32_t chroma_format_idc = exp_golomb.ReadUE();
 		if (chroma_format_idc == 3) {
 			// separate_colour_plane_flag: u(1)
@@ -192,7 +194,8 @@ int ParseVideoResolution(const std::vector<uint8_t>& data, SpsNalu& sps) {
 							    delta_scale > kScaldingDeltaMax) {
 								return -6;
 							}
-							next_scale = (last_scale + delta_scale + 256) % 256;
+							next_scale =
+							  (last_scale + delta_scale + 256) % 256;
 						}
 						if (next_scale != 0)
 							last_scale = next_scale;

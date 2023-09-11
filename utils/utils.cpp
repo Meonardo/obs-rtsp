@@ -1,5 +1,6 @@
 #include "utils.h"
 
+#include <algorithm>
 #include <regex>
 
 namespace utils {
@@ -21,4 +22,18 @@ std::tuple<std::string, std::string, std::string> ExtractRtspUrl(const std::stri
 	}
 	return std::make_tuple("", "", "");
 }
+
+namespace string {
+std::string ToLower(const std::string& source) {
+	std::string result = source;
+	std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) { return std::tolower(c); });
+	return result;
+}
+
+std::string ToUpper(const std::string& source) {
+	std::string result = source;
+	std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) { return std::toupper(c); });
+	return result;
+}
+} // namespace string
 } // namespace utils

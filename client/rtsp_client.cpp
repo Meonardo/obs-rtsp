@@ -65,11 +65,13 @@ void RtspClient::Stop() {
 	blog(LOG_INFO, "RTSP client stopped");
 }
 
-bool RtspClient::onNewSession(const char* id, const char* media, const char* codec, const char* sdp) {
+bool RtspClient::onNewSession(const char* id, const char* media, const char* codec,
+			      const char* sdp) {
 	bool success = false;
 
 	if (strcmp(media, "video") == 0) {
-		blog(LOG_INFO, "New session created: id: %s, media: %s, codec: %s, sdp: %s", id, media, codec, sdp);
+		blog(LOG_INFO, "New session created: id: %s, media: %s, codec: %s, sdp: %s", id,
+		     media, codec, sdp);
 
 		if ((strcmp(codec, "H264") == 0)) { // only support H.264 codec
 			codec_[id] = codec;
@@ -85,7 +87,8 @@ bool RtspClient::onNewSession(const char* id, const char* media, const char* cod
 
 				utils::h264::SpsNalu sps_nalu;
 				std::vector<uint8_t> sps_nalu_data(sps, sps + result_size);
-				auto ret = utils::h264::ParseVideoResolution(sps_nalu_data, sps_nalu);
+				auto ret =
+				  utils::h264::ParseVideoResolution(sps_nalu_data, sps_nalu);
 				if (ret == 0) {
 					width_ = sps_nalu.width;
 					height_ = sps_nalu.height;
@@ -96,12 +99,13 @@ bool RtspClient::onNewSession(const char* id, const char* media, const char* cod
 		}
 	}
 
-  observer_->OnSessionStarted(id, media, codec, sdp);
+	observer_->OnSessionStarted(id, media, codec, sdp);
 
 	return success;
 }
 
-bool RtspClient::onData(const char* id, unsigned char* buffer, ssize_t size, struct timeval presentationTime) {
+bool RtspClient::onData(const char* id, unsigned char* buffer, ssize_t size,
+			struct timeval presentationTime) {
 	ProcessBuffer(id, buffer, size, presentationTime);
 	return true;
 }
@@ -121,49 +125,51 @@ void RtspClient::onDataTimeout(RTSPConnection& connection) {
 	observer_->OnSessionStopped("timeout");
 }
 
-void RtspClient::ProcessBuffer(const char* id, unsigned char* buffer, ssize_t size, struct timeval presentationTime) {
+void RtspClient::ProcessBuffer(const char* id, unsigned char* buffer, ssize_t size,
+			       struct timeval presentationTime) {
 	std::string codec = codec_[id];
 	if (codec == "H264") {
-		std::vector<utils::h264::NaluIndex> indexes = utils::h264::FindNaluIndices(buffer, size);
+		observer_->OnData(buffer, size, presentationTime);
+		//std::vector<utils::h264::NaluIndex> indexes = utils::h264::FindNaluIndices(buffer, size);
 
-		for (const utils::h264::NaluIndex& index : indexes) {
-			utils::h264::NaluType nalu_type =
-			  utils::h264::ParseNaluType(buffer[index.payload_start_offset]);
-			if (nalu_type == utils::h264::NaluType::kSps) {
-				// blog(LOG_INFO, "SPS NALU");
+		//for (const utils::h264::NaluIndex& index : indexes) {
+		//	utils::h264::NaluType nalu_type =
+		//	  utils::h264::ParseNaluType(buffer[index.payload_start_offset]);
+		//	if (nalu_type == utils::h264::NaluType::kSps) {
+		//		// blog(LOG_INFO, "SPS NALU");
 
-				cfg_.clear();
-				cfg_.insert(cfg_.end(), buffer + index.start_offset,
-					    buffer + index.payload_size + index.payload_start_offset -
-					      index.start_offset);
+		//		cfg_.clear();
+		//		cfg_.insert(cfg_.end(), buffer + index.start_offset,
+		//			    buffer + index.payload_size + index.payload_start_offset -
+		//			      index.start_offset);
 
-			} else if (nalu_type == utils::h264::NaluType::kPps) {
-				// blog(LOG_INFO, "PPS NALU");
+		//	} else if (nalu_type == utils::h264::NaluType::kPps) {
+		//		// blog(LOG_INFO, "PPS NALU");
 
-				cfg_.insert(cfg_.end(), buffer + index.start_offset,
-					    buffer + index.payload_size + index.payload_start_offset -
-					      index.start_offset);
-			} else if (nalu_type == utils::h264::NaluType::kSei) {
-				// blog(LOG_INFO, "SEI NALU");
-			} else {
-				std::vector<uint8_t> content;
-				if (nalu_type == utils::h264::NaluType::kIdr) {
-					// blog(LOG_INFO, "IDR NALU");
+		//		cfg_.insert(cfg_.end(), buffer + index.start_offset,
+		//			    buffer + index.payload_size + index.payload_start_offset -
+		//			      index.start_offset);
+		//	} else if (nalu_type == utils::h264::NaluType::kSei) {
+		//		// blog(LOG_INFO, "SEI NALU");
+		//	} else {
+		//		std::vector<uint8_t> content;
+		//		if (nalu_type == utils::h264::NaluType::kIdr) {
+		//			// blog(LOG_INFO, "IDR NALU");
 
-					content.insert(content.end(), cfg_.begin(), cfg_.end());
-				}
-				// else {
-				//	blog(LOG_DEBUG, "NALU type: %d",
-				//	     nalu_type);
-				// }
+		//			content.insert(content.end(), cfg_.begin(), cfg_.end());
+		//		}
+		//		// else {
+		//		//	blog(LOG_DEBUG, "NALU type: %d",
+		//		//	     nalu_type);
+		//		// }
 
-				content.insert(content.end(), buffer + index.start_offset,
-					       buffer + index.payload_size + index.payload_start_offset -
-						 index.start_offset);
+		//		content.insert(content.end(), buffer + index.start_offset,
+		//			       buffer + index.payload_size + index.payload_start_offset -
+		//				 index.start_offset);
 
-				observer_->OnData(content.data(), content.size(), presentationTime);
-			}
-		}
+		//		observer_->OnData(content.data(), content.size(), presentationTime);
+		//	}
+		//}
 	}
 }
 
