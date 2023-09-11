@@ -175,19 +175,6 @@ enum obs_media_state RtspSource::GetState() {
 	return media_state_;
 }
 
-uint32_t RtspSource::GetWidth() {
-	if (client_ == nullptr) {
-		return 1920;
-	}
-	return client_->GetWidth();
-}
-
-uint32_t RtspSource::GetHeight() {
-	if (client_ == nullptr)
-		return 1080;
-	return client_->GetHeight();
-}
-
 void RtspSource::PlayPause(bool pause) {}
 
 void RtspSource::Restart() {}
@@ -533,12 +520,6 @@ void register_rtsp_source() {
 	};
 	info.hide = [](void* priv_data) {
 		static_cast<RtspSource*>(priv_data)->Hide();
-	};
-	info.get_width = [](void* priv_data) -> uint32_t {
-		return static_cast<RtspSource*>(priv_data)->GetWidth();
-	};
-	info.get_height = [](void* priv_data) -> uint32_t {
-		return static_cast<RtspSource*>(priv_data)->GetHeight();
 	};
 	info.media_play_pause = [](void* priv_data, bool pause) {
 		static_cast<RtspSource*>(priv_data)->PlayPause(pause);

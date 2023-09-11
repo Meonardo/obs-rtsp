@@ -39,8 +39,6 @@ public:
 	void Stop();
 	void Restart();
 	void SetTime(int64_t ms);
-	uint32_t GetWidth();
-	uint32_t GetHeight();
 	// obs-source related functions end
 
 	// the `Apply` button events from properties setting window(UI)
@@ -73,6 +71,7 @@ private:
 	const AVCodec* codec_;
 	AVPixelFormat hw_format_;
 	bool hw_decoder_available_;
+
 	// obs frame properties
 	obs_source_frame obs_frame_;
 	obs_media_state media_state_;
