@@ -68,21 +68,23 @@ private:
 	AVFrame* sw_frame_;
 	AVFrame* hw_frame_;
 	AVPacket* pkt_;
-	// Decoding
 	AVCodecContext* codec_ctx_;
 	AVBufferRef* hw_ctx_;
 	const AVCodec* codec_;
 	AVPixelFormat hw_format_;
 	bool hw_decoder_available_;
+	// obs frame properties
+	obs_source_frame obs_frame_;
+	obs_media_state media_state_;
+	video_format video_format_;
+	video_colorspace color_space_;
 
-  obs_source_frame obs_frame_;
-  obs_media_state media_state_;
-  video_format video_format_;
-  video_colorspace color_space_;
-
-	bool InitFFmpegFormat(const char* codec, bool video, bool hw_decode);
+	bool InitFFmpeg(const char* codec, bool video);
+	void DestoryFFmpeg();
 	bool HardwareFormatTypeAvailable(const AVCodec* codec, AVHWDeviceType type);
 	void InitHardwareDecoder(const AVCodec* codec);
+
+  bool PrepareToPlay();
 };
 
 void register_rtsp_source();
