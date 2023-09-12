@@ -48,8 +48,11 @@ target_sources(
   # utils
   utils/utils.h
   utils/utils.cpp
+  utils/video_utils.h
   utils/h264/h264_common.h
   utils/h264/h264_common.cpp
+  utils/h265/h265_common.h
+  utils/h265/h265_common.cpp
 
   # server
 

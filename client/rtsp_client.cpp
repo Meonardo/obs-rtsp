@@ -1,8 +1,8 @@
 #include "rtsp_client.h"
 
-#include <bitset>
 #include "Base64.hh"
 #include "utils/h264/h264_common.h"
+#include "utils/h265/h265_common.h"
 
 namespace source {
 RtspClient::RtspClient(const std::string& uri, const std::map<std::string, std::string>& opts,
@@ -77,25 +77,44 @@ bool RtspClient::onNewSession(const char* id, const char* media, const char* cod
 		success = true;
 
 		// try to retrieve video resolution from sdp
-		auto sps_base64 = client_->getFmtpSpropParametersSets();
-		blog(LOG_INFO, "sps in base64: %s", sps_base64);
-		if (strlen(sps_base64)) {
-			int width = 0, height = 0;
-			unsigned result_size = 0;
-			unsigned char* sps = base64Decode(sps_base64, result_size, true);
+		if (strcmp(codec, "h264") == 0 || strcmp(codec, "H264") == 0) {
+			auto sps_base64 = client_->getFmtpSpropParametersSets();
+			blog(LOG_INFO, "sps in base64: %s", sps_base64);
+			if (strlen(sps_base64)) {
+				unsigned result_size = 0;
+				unsigned char* sps = base64Decode(sps_base64, result_size, true);
 
-			if (strcmp(codec, "h264") == 0) {
-				utils::h264::SpsNalu sps_nalu;
-				std::vector<uint8_t> sps_nalu_data(sps, sps + result_size);
-				auto ret =
-				  utils::h264::ParseVideoResolution(sps_nalu_data, sps_nalu);
-				if (ret == 0) {
-					width_ = sps_nalu.width;
-					height_ = sps_nalu.height;
-				} else {
-					blog(LOG_ERROR, "Can not parse video resolution info");
-				}
+        std::vector<uint8_t> sps_nalu_data(sps, sps + result_size);
+        auto sps_nalu = utils::h264::ParseSps(sps_nalu_data);
+        if (sps_nalu.has_value()) {
+          width_ = sps_nalu->width;
+          height_ = sps_nalu->height;
+        }
+        else {
+          blog(LOG_ERROR, "Can not parse video resolution info");
+        }
 			}
+			
+		} else if (strcmp(codec, "h265") == 0 || strcmp(codec, "H265") == 0) {
+      auto sps_base64 = client_->getFmtpSpropsps();
+      blog(LOG_INFO, "sps in base64: %s", sps_base64);
+      if (strlen(sps_base64)) {
+        unsigned result_size = 0;
+        unsigned char* sps = base64Decode(sps_base64, result_size, true);
+
+        std::vector<uint8_t> sps_nalu_data(sps, sps + result_size);
+        auto sps_nalu = utils::h265::ParseSps(sps_nalu_data);
+        if (sps_nalu.has_value()) {
+          width_ = sps_nalu->width;
+          height_ = sps_nalu->height;
+        }
+        else {
+          blog(LOG_ERROR, "Can not parse video resolution info");
+        }
+      }
+			
+		} else {
+			blog(LOG_ERROR, "Unsupported codec: %s", codec);
 		}
 	}
 
