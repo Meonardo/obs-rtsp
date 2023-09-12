@@ -1,11 +1,9 @@
 #ifndef COMMON_VIDEO_H264_H264_COMMON_H_
 #define COMMON_VIDEO_H264_H264_COMMON_H_
 
-#include <stddef.h>
-#include <stdint.h>
+#include "utils/video_utils.h"
 
-#include <bitset>
-#include <vector>
+#include <optional>
 
 // this file is heavily brorrowed from chromium project
 // please see: https://source.chromium.org/chromium/chromium/src/+/main:third_party/webrtc/common_video/h264/h264_common.h
@@ -39,17 +37,8 @@ enum NaluType : uint8_t {
 
 enum SliceType : uint8_t { kP = 0, kB = 1, kI = 2, kSp = 3, kSi = 4 };
 
-struct NaluIndex {
-	// Start index of NALU, including start sequence.
-	size_t start_offset;
-	// Start index of NALU payload, typically type header.
-	size_t payload_start_offset;
-	// Length of NALU payload, in bytes, counting from payload_start_offset.
-	size_t payload_size;
-};
-
 // Returns a vector of the NALU indices in the given buffer.
-std::vector<NaluIndex> FindNaluIndices(const uint8_t* buffer, size_t buffer_size);
+std::vector<video::NaluIndex> FindNaluIndices(const uint8_t* buffer, size_t buffer_size);
 
 // Get the NAL type from the header byte immediately following start sequence.
 NaluType ParseNaluType(uint8_t data);
@@ -89,8 +78,8 @@ struct SpsNalu {
 	uint32_t id = 0;
 };
 
-// Parse the given SPS NALU and populate the given SpsNalu struct.
-int ParseVideoResolution(const std::vector<uint8_t>& data, SpsNalu& sps);
+// Parse the given buffer data and return a SpsNalu struct.
+std::optional<SpsNalu> ParseSps(const std::vector<uint8_t>& data);
 } // namespace utils::h264
 
 #endif // COMMON_VIDEO_H264_H264_COMMON_H_
