@@ -7,6 +7,7 @@
 #include <string>
 #include <map>
 #include <mutex>
+#include <unordered_map>
 
 #include "rtspconnectionclient.h"
 
@@ -15,11 +16,9 @@ class RTSPClientObserver {
 public:
 	virtual ~RTSPClientObserver() = default;
 
-	virtual void OnSessionStarted(const char* id, const char* media, const char* codec,
-				      const char* sdp) = 0;
+	virtual bool OnSessionStarted(bool video, const char* codec) = 0;
 	virtual void OnSessionStopped(const char* msg) = 0;
-	virtual void OnData(unsigned char* buffer, ssize_t size,
-			    struct timeval presentationTime) = 0;
+	virtual void OnData(unsigned char* buffer, ssize_t size, timeval time, bool video) = 0;
 	virtual void OnError(const char* msg) = 0;
 };
 
@@ -46,7 +45,7 @@ public:
 	virtual bool onNewSession(const char* id, const char* media, const char* codec,
 				  const char* sdp) override;
 	virtual bool onData(const char* id, unsigned char* buffer, ssize_t size,
-			    struct timeval presentationTime) override;
+			    timeval presentationTime) override;
 	virtual void onError(RTSPConnection& connection, const char* message) override;
 	virtual void onConnectionTimeout(RTSPConnection& connection) override;
 	virtual void onDataTimeout(RTSPConnection& connection) override;
@@ -58,7 +57,7 @@ private:
 	std::string uri_;
 	std::map<std::string, std::string> opts_;
 	std::thread capture_thread_;
-	std::map<std::string, std::string> codec_;
+	std::unordered_map<std::string, std::string> media_ids_;
 	std::vector<uint8_t> cfg_;
 	// video resolution info
 	uint32_t width_ = 1920;
