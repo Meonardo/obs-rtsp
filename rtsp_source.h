@@ -20,6 +20,51 @@ extern "C" {
 #endif
 }
 
+class Decoder {
+public:
+	Decoder(bool video, bool require_hw, const std::string& codec);
+	~Decoder();
+
+	// mark as delete to avoid copy
+	Decoder(const Decoder&) = delete;
+	Decoder(const Decoder&&) = delete;
+
+	bool Avaiable() const { return codec_ctx_ != nullptr; }
+	bool HardwareDecoderAvailable() const { return hw_decoder_available_; }
+
+	bool Init();
+	void Destory();
+
+	bool Decode(unsigned char* buffer, ssize_t size, timeval time, obs_source_frame* result);
+	bool Decode(unsigned char* buffer, ssize_t size, timeval time, obs_source_audio* result);
+
+private:
+	bool video_; // audio or video
+	std::string codec_name_;
+	AVCodecContext* codec_ctx_;
+	const AVCodec* codec_;
+	AVFrame* in_frame_;
+	AVFrame* sw_frame_;
+
+	// packet
+	AVPacket* pkt_;
+
+	// hardware codec related
+	bool require_hw_;
+	bool hw_decoder_available_;
+	AVBufferRef* hw_ctx_;
+	AVPixelFormat hw_format_;
+	AVFrame* hw_frame_;
+
+	// obs video frame properties
+	video_format video_format_;
+	video_colorspace color_space_;
+
+	void InitHardwareDecoder(const AVCodec* codec);
+	bool HardwareFormatTypeAvailable(const AVCodec* c, AVHWDeviceType type);
+	bool DecodePacket(unsigned char* buffer, ssize_t size);
+};
+
 class RtspSource : public source::RTSPClientObserver {
 public:
 	RtspSource(obs_data_t* settings, obs_source_t* source);
@@ -33,23 +78,16 @@ public:
 	void Show();
 	void Hide();
 	enum obs_media_state GetState();
-	int64_t GetTime();
-	int64_t GetDuration();
-	void PlayPause(bool pause);
 	void Stop();
-	void Restart();
-	void SetTime(int64_t ms);
 	// obs-source related functions end
 
 	// the `Apply` button events from properties setting window(UI)
 	bool OnApplyBtnClicked(obs_properties_t* props, obs_property_t* property);
 
 	// overrides begin
-	virtual void OnSessionStarted(const char* id, const char* media, const char* codec,
-				      const char* sdp) override;
+	virtual bool OnSessionStarted(bool video, const char* codec) override;
 	virtual void OnSessionStopped(const char* msg) override;
-	virtual void OnData(unsigned char* buffer, ssize_t size,
-			    struct timeval presentationTime) override;
+	virtual void OnData(unsigned char* buffer, ssize_t size, timeval time, bool video) override;
 	virtual void OnError(const char* msg) override;
 	// overrides end
 
@@ -60,30 +98,24 @@ private:
 	std::string rtsp_url_;
 	source::RtspClient* client_;
 
-	// FFmpeg
+	// decoders
+	Decoder* video_decoder_;
+	Decoder* audio_decoder_;
 	AVFormatContext* fmt_ctx_;
-	AVFrame* in_frame_;
-	AVFrame* sw_frame_;
-	AVFrame* hw_frame_;
-	AVPacket* pkt_;
-	AVCodecContext* codec_ctx_;
-	AVBufferRef* hw_ctx_;
-	const AVCodec* codec_;
-	AVPixelFormat hw_format_;
-	bool hw_decoder_available_;
+	bool hw_decode_;
+
+	// configures
+	bool video_disabled_; // only receive audio
+	bool audio_disabled_; // only receive video
 
 	// obs frame properties
 	obs_source_frame obs_frame_;
 	obs_media_state media_state_;
-	video_format video_format_;
-	video_colorspace color_space_;
+	obs_source_audio obs_audio_frame_;
 
 	bool InitFFmpeg(const char* codec, bool video);
 	void DestoryFFmpeg();
-	bool HardwareFormatTypeAvailable(const AVCodec* codec, AVHWDeviceType type);
-	void InitHardwareDecoder(const AVCodec* codec);
-
-  bool PrepareToPlay();
+	bool PrepareToPlay();
 };
 
 void register_rtsp_source();
