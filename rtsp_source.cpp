@@ -228,11 +228,14 @@ void Decoder::Destory() {
 	}
 }
 
-bool Decoder::Decode(unsigned char* buffer, ssize_t size, timeval time, obs_source_frame* frame) {
+bool Decoder::Decode(unsigned char* buffer, ssize_t size, timeval time, obs_source_frame* frame,
+		     obs_source_audio* audio) {
+  // decode packet
 	if (!DecodePacket(buffer, size)) {
 		return false;
 	}
 
+  // check if need use hardware decoder
 	if (hw_decoder_available_) {
 		auto ret = av_hwframe_transfer_data(sw_frame_, hw_frame_, 0);
 		if (ret != 0) {
@@ -242,102 +245,90 @@ bool Decoder::Decode(unsigned char* buffer, ssize_t size, timeval time, obs_sour
 			return false;
 		}
 
-		sw_frame_->color_range = hw_frame_->color_range;
-		sw_frame_->color_primaries = hw_frame_->color_primaries;
-		sw_frame_->color_trc = hw_frame_->color_trc;
-		sw_frame_->colorspace = hw_frame_->colorspace;
+		if (video_) {
+			sw_frame_->color_range = hw_frame_->color_range;
+			sw_frame_->color_primaries = hw_frame_->color_primaries;
+			sw_frame_->color_trc = hw_frame_->color_trc;
+			sw_frame_->colorspace = hw_frame_->colorspace;
+		}
 	}
 
-	auto format = convert_pixel_format(sw_frame_->format);
-	if (format == VIDEO_FORMAT_NONE) {
-		blog(LOG_ERROR, "video format is none?");
-		return false;
-	}
-
-	for (size_t i = 0; i < MAX_AV_PLANES; i++) {
-		frame->data[i] = sw_frame_->data[i];
-		frame->linesize[i] = abs(sw_frame_->linesize[i]);
-	}
-
-	frame->format = format;
-	frame->width = sw_frame_->width;
-	frame->height = sw_frame_->height;
-	frame->timestamp = time.tv_sec;
-	frame->flip = false;
-	frame->max_luminance = 0;
-
-	auto color_space = convert_color_space(sw_frame_->colorspace, sw_frame_->color_trc,
-					       sw_frame_->color_primaries);
-	auto color_range = convert_color_range(sw_frame_->color_range);
-	frame->full_range = color_range;
-
-	if (color_space != color_space_ || format != video_format_) {
-		bool success = video_format_get_parameters_for_format(color_space, color_range,
-								      format, frame->color_matrix,
-								      frame->color_range_min,
-								      frame->color_range_max);
-		color_space_ = color_space;
-		video_format_ = format;
-		if (!success) {
-			frame->format = VIDEO_FORMAT_NONE;
+	if (video_) {
+		auto format = convert_pixel_format(sw_frame_->format);
+		if (format == VIDEO_FORMAT_NONE) {
 			blog(LOG_ERROR, "video format is none?");
 			return false;
 		}
-	}
-	if (frame->format == VIDEO_FORMAT_NONE) {
-		blog(LOG_ERROR, "video format is none?");
-		return false;
-	}
 
-	switch (sw_frame_->color_trc) {
-	case AVCOL_TRC_BT709:
-	case AVCOL_TRC_GAMMA22:
-	case AVCOL_TRC_GAMMA28:
-	case AVCOL_TRC_SMPTE170M:
-	case AVCOL_TRC_SMPTE240M:
-	case AVCOL_TRC_IEC61966_2_1: frame->trc = VIDEO_TRC_SRGB; break;
-	case AVCOL_TRC_SMPTE2084: frame->trc = VIDEO_TRC_PQ; break;
-	case AVCOL_TRC_ARIB_STD_B67: frame->trc = VIDEO_TRC_HLG; break;
-	default: frame->trc = VIDEO_TRC_DEFAULT;
-	}
+		for (size_t i = 0; i < MAX_AV_PLANES; i++) {
+			frame->data[i] = sw_frame_->data[i];
+			frame->linesize[i] = abs(sw_frame_->linesize[i]);
+		}
 
-	return true;
-}
+		frame->format = format;
+		frame->width = sw_frame_->width;
+		frame->height = sw_frame_->height;
+		frame->timestamp = time.tv_sec;
+		frame->flip = false;
+		frame->max_luminance = 0;
 
-bool Decoder::Decode(unsigned char* buffer, ssize_t size, timeval time, obs_source_audio* audio) {
-	blog(LOG_INFO, "decode audio, buffer size: %u", size);
-	if (!DecodePacket(buffer, size)) {
-		return false;
-	}
+		auto color_space = convert_color_space(sw_frame_->colorspace, sw_frame_->color_trc,
+						       sw_frame_->color_primaries);
+		auto color_range = convert_color_range(sw_frame_->color_range);
+		frame->full_range = color_range;
 
-	if (hw_decoder_available_) {
-		auto ret = av_hwframe_transfer_data(sw_frame_, hw_frame_, 0);
-		if (ret != 0) {
-			blog(LOG_ERROR,
-			     "error transfer data from hw frame to sw frame, error: %s\n",
-			     av_err2str(ret));
+		if (color_space != color_space_ || format != video_format_) {
+			bool success = video_format_get_parameters_for_format(
+			  color_space, color_range, format, frame->color_matrix,
+			  frame->color_range_min, frame->color_range_max);
+			color_space_ = color_space;
+			video_format_ = format;
+			if (!success) {
+				frame->format = VIDEO_FORMAT_NONE;
+				blog(LOG_ERROR, "video format is none?");
+				return false;
+			}
+		}
+		if (frame->format == VIDEO_FORMAT_NONE) {
+			blog(LOG_ERROR, "video format is none?");
 			return false;
 		}
-	}
 
-	int channels;
+		switch (sw_frame_->color_trc) {
+		case AVCOL_TRC_BT709:
+		case AVCOL_TRC_GAMMA22:
+		case AVCOL_TRC_GAMMA28:
+		case AVCOL_TRC_SMPTE170M:
+		case AVCOL_TRC_SMPTE240M:
+		case AVCOL_TRC_IEC61966_2_1: frame->trc = VIDEO_TRC_SRGB; break;
+		case AVCOL_TRC_SMPTE2084: frame->trc = VIDEO_TRC_PQ; break;
+		case AVCOL_TRC_ARIB_STD_B67: frame->trc = VIDEO_TRC_HLG; break;
+		default: frame->trc = VIDEO_TRC_DEFAULT;
+		}
+
+		return true;
+	} else {
+		blog(LOG_INFO, "decode audio, buffer size: %u", size);
+
+		int channels;
 #if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(59, 19, 100)
-	channels = sw_frame_->channels;
+		channels = sw_frame_->channels;
 #else
-	channels = sw_frame_->ch_layout.nb_channels;
+		channels = sw_frame_->ch_layout.nb_channels;
 #endif
-	for (size_t i = 0; i < MAX_AV_PLANES; i++) audio->data[i] = sw_frame_->data[i];
+		for (size_t i = 0; i < MAX_AV_PLANES; i++) audio->data[i] = sw_frame_->data[i];
 
-	audio->samples_per_sec = sw_frame_->sample_rate;
-	audio->speakers = convert_speaker_layout(channels);
-	audio->format = convert_sample_format(sw_frame_->format);
-	audio->frames = sw_frame_->nb_samples;
-	audio->timestamp = time.tv_sec;
+		audio->samples_per_sec = sw_frame_->sample_rate;
+		audio->speakers = convert_speaker_layout(channels);
+		audio->format = convert_sample_format(sw_frame_->format);
+		audio->frames = sw_frame_->nb_samples;
+		audio->timestamp = time.tv_sec;
 
-	if (audio->format == AUDIO_FORMAT_UNKNOWN)
-		return false;
+		if (audio->format == AUDIO_FORMAT_UNKNOWN)
+			return false;
 
-	return true;
+		return true;
+	}
 }
 
 bool Decoder::DecodePacket(unsigned char* buffer, ssize_t size) {
@@ -470,7 +461,6 @@ void RtspSource::Update(obs_data_t* settings) {
 void RtspSource::GetDefaults(obs_data_t* settings) {
 	obs_data_set_default_string(settings, "url", "rtsp://");
 	obs_data_set_default_bool(settings, "stop_on_hide", true);
-	obs_data_set_default_bool(settings, "restart_on_error", true);
 	obs_data_set_default_int(settings, "restart_timeout", 20);
 	obs_data_set_default_bool(settings, "block_video", false);
 	obs_data_set_default_bool(settings, "block_audio", false);
@@ -485,9 +475,7 @@ obs_properties* RtspSource::GetProperties() {
 	obs_property_t* prop = obs_properties_add_text(props, "url", "RTSP URL", OBS_TEXT_DEFAULT);
 	obs_property_set_long_description(prop, "Specify the RTSP URL to play");
 
-	obs_properties_add_bool(props, "restart_on_error",
-				"Try to restart after connecting RTSP stream encountered an error");
-	obs_properties_add_int(props, "restart_timeout", "Error timeout seconds", 0, 20, 1);
+	obs_properties_add_int(props, "restart_timeout", "Error timeout seconds", 5, 20, 1);
 	obs_properties_add_bool(props, "stop_on_hide", "Stop playing when hidden");
 	obs_properties_add_bool(props, "block_video", "Disable video");
 	obs_properties_add_bool(props, "block_audio", "Disable audio");
@@ -539,7 +527,7 @@ bool RtspSource::OnApplyBtnClicked(obs_properties_t* props, obs_property_t* prop
 }
 
 bool RtspSource::PrepareToPlay() {
-  // check RTSP URL is valid
+	// check RTSP URL is valid
 	std::string url = obs_data_get_string(settings_, "url");
 	if (url.empty()) {
 		blog(LOG_ERROR, "RTSP url is empty");
@@ -555,14 +543,14 @@ bool RtspSource::PrepareToPlay() {
 	rtsp_url_ = rtsp;
 	blog(LOG_INFO, "play rtsp source url: %s", rtsp_url_.c_str());
 
-  // stop the already running session
+	// stop the already running session
 	Stop();
 
 	uint64_t timeout = obs_data_get_int(settings_, "restart_timeout");
 	std::map<std::string, std::string> opts;
 	opts["timeout"] = std::to_string(timeout);
 
-  // save the configures
+	// save the configures
 	hw_decode_ = obs_data_get_bool(settings_, "hw_decode");
 	video_disabled_ = obs_data_get_bool(settings_, "block_video");
 	audio_disabled_ = obs_data_get_bool(settings_, "block_audio");
@@ -602,13 +590,13 @@ void RtspSource::OnError(const char* msg) {
 
 void RtspSource::OnData(unsigned char* buffer, ssize_t size, timeval time, bool video) {
 	if (video) {
-		if (video_decoder_->Decode(buffer, size, time, &obs_frame_)) {
+		if (video_decoder_->Decode(buffer, size, time, &obs_frame_, nullptr)) {
 			// send to obs
 			obs_source_output_video(source_, &obs_frame_);
 		}
 	} else {
 		struct obs_source_audio audio = {0};
-		if (audio_decoder_->Decode(buffer, size, time, &audio)) {
+		if (audio_decoder_->Decode(buffer, size, time, nullptr, &audio)) {
 			// send to obs
 			obs_source_output_audio(source_, &audio);
 		}

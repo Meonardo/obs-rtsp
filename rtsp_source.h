@@ -24,10 +24,8 @@ class Decoder {
 public:
 	Decoder(bool video, bool require_hw, const std::string& codec);
 	~Decoder();
-
-	// mark as delete to avoid copy
 	Decoder(const Decoder&) = delete;
-	Decoder(const Decoder&&) = delete;
+	Decoder(const Decoder&&) noexcept = delete;
 
 	bool Avaiable() const { return codec_ctx_ != nullptr; }
 	bool HardwareDecoderAvailable() const { return hw_decoder_available_; }
@@ -35,8 +33,8 @@ public:
 	bool Init();
 	void Destory();
 
-	bool Decode(unsigned char* buffer, ssize_t size, timeval time, obs_source_frame* result);
-	bool Decode(unsigned char* buffer, ssize_t size, timeval time, obs_source_audio* result);
+	bool Decode(unsigned char* buffer, ssize_t size, timeval time, obs_source_frame* frame,
+		    obs_source_audio* audio);
 
 private:
 	bool video_; // audio or video
@@ -105,10 +103,10 @@ private:
 	bool hw_decode_;
 
 	// configures
-	bool video_disabled_; // only receive audio
-	bool audio_disabled_; // only receive video
+	bool video_disabled_; // only receive audio, defalut is false
+	bool audio_disabled_; // only receive video, defalut is false
 
-	// obs frame properties
+	// obs source properties
 	obs_source_frame obs_frame_;
 	obs_media_state media_state_;
 	obs_source_audio obs_audio_frame_;
