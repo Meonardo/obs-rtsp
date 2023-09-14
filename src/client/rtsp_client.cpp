@@ -3,9 +3,9 @@
 #include <iostream>
 
 #include "Base64.hh"
-#include "utils/h264/h264_common.h"
-#include "utils/h265/h265_common.h"
-#include "utils/utils.h"
+#include "src/utils/h264/h264_common.h"
+#include "src/utils/h265/h265_common.h"
+#include "src/utils/utils.h"
 
 #include <util/threading.h>
 

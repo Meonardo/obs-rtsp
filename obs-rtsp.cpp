@@ -1,6 +1,6 @@
 #include <obs-module.h>
 
-#include "rtsp_source.h"
+#include "src/rtsp_source.h"
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-rtsp", "en-US")

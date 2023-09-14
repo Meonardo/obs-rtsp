@@ -1,7 +1,7 @@
 #ifndef COMMON_VIDEO_H264_H264_COMMON_H_
 #define COMMON_VIDEO_H264_H264_COMMON_H_
 
-#include "utils/video_utils.h"
+#include "src/utils/video_utils.h"
 
 #include <optional>
 

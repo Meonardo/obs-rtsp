@@ -42,23 +42,23 @@ target_sources(
   obs-rtsp.cpp
 
   # source
-  rtsp_source.h
-  rtsp_source.cpp
+  src/rtsp_source.h
+  src/rtsp_source.cpp
 
   # utils
-  utils/utils.h
-  utils/utils.cpp
-  utils/video_utils.h
-  utils/h264/h264_common.h
-  utils/h264/h264_common.cpp
-  utils/h265/h265_common.h
-  utils/h265/h265_common.cpp
+  src/utils/utils.h
+  src/utils/utils.cpp
+  src/utils/video_utils.h
+  src/utils/h264/h264_common.h
+  src/utils/h264/h264_common.cpp
+  src/utils/h265/h265_common.h
+  src/utils/h265/h265_common.cpp
 
   # server
 
   # client
-  client/rtsp_client.h
-  client/rtsp_client.cpp
+  src/client/rtsp_client.h
+  src/client/rtsp_client.cpp
 )
 
 target_link_libraries(
