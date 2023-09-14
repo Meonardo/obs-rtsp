@@ -7,6 +7,8 @@
 #include "utils/h265/h265_common.h"
 #include "utils/utils.h"
 
+#include <util/threading.h>
+
 namespace source {
 RtspClient::RtspClient(const std::string& uri, const std::map<std::string, std::string>& opts,
 		       RTSPClientObserver* observer)
@@ -35,7 +37,7 @@ uint32_t RtspClient::GetHeight() const {
 }
 
 void RtspClient::CaptureThread() {
-	SetThreadDescription(GetCurrentThread(), L"rtsp_capture_thread");
+  os_set_thread_name("rtsp_capture_thread");
 	env_->mainloop();
 }
 
