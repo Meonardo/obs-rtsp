@@ -11,9 +11,12 @@
   - [x] H.264;
   - [x] H.265;
 - Audio:
-  - WIP
+  - [x] AAC
+  - [ ] more tests
 - RTSP server:
   - WIP  
+- Issue:
+  - decode audio & video in the same thread
 
 ## Credit
 - `liblive555helper` is based on [mpromonet/live555helper](https://github.com/mpromonet/live555helper);
