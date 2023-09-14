@@ -122,7 +122,7 @@ Decoder::~Decoder() {
 	Destory();
 }
 
-bool Decoder::Init() {
+bool Decoder::Init(int rate, int channels) {
 	if (video_) {
 		codec_ = avcodec_find_decoder_by_name(codec_name_.c_str());
 		if (codec_ == nullptr) {
@@ -159,6 +159,12 @@ bool Decoder::Init() {
 	if (codec_ctx_ == nullptr) {
 		blog(LOG_ERROR, "AVCodecContext init failed");
 		return false;
+	}
+
+  // audio configures
+	if (!video_) {
+    codec_ctx_->channels = channels;
+		codec_ctx_->sample_rate = rate;
 	}
 
 	if (require_hw_) { // init hardware decoder if necessary
@@ -230,12 +236,13 @@ void Decoder::Destory() {
 
 bool Decoder::Decode(unsigned char* buffer, ssize_t size, timeval time, obs_source_frame* frame,
 		     obs_source_audio* audio) {
-  // decode packet
+	// decode packet
 	if (!DecodePacket(buffer, size)) {
+		blog(LOG_INFO, "decode failed, buffer size: %u", size);
 		return false;
 	}
 
-  // check if need use hardware decoder
+	// check if need use hardware decoder
 	if (hw_decoder_available_) {
 		auto ret = av_hwframe_transfer_data(sw_frame_, hw_frame_, 0);
 		if (ret != 0) {
@@ -308,8 +315,6 @@ bool Decoder::Decode(unsigned char* buffer, ssize_t size, timeval time, obs_sour
 
 		return true;
 	} else {
-		blog(LOG_INFO, "decode audio, buffer size: %u", size);
-
 		int channels;
 #if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(59, 19, 100)
 		channels = sw_frame_->channels;
@@ -562,20 +567,52 @@ bool RtspSource::PrepareToPlay() {
 }
 
 // override methods
-bool RtspSource::OnSessionStarted(bool video, const char* codec) {
-	blog(LOG_INFO, "RTSP session started");
-	if (video_disabled_ && audio_disabled_) { // nothing to play with
+bool RtspSource::OnVideoSessionStarted(const char* codec, int width, int height) {
+	blog(LOG_INFO, "RTSP video session started");
+	if (video_disabled_) { // nothing to play with
 		blog(LOG_INFO, "no media source enabled");
 		return false;
 	}
-	bool ret = InitFFmpeg(codec, video);
+	bool ret = InitFFmpeg();
 	if (!ret) {
 		blog(LOG_ERROR, "Init ffmpeg format failed");
 		return false;
 	}
 
+  // init decoders
+  auto codec_name = utils::string::ToLower(codec);
+  bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
+	if (video_decoder_ == nullptr) {
+		video_decoder_ = new Decoder(true, hw_decode, codec_name);
+	}
+
 	media_state_ = OBS_MEDIA_STATE_PLAYING;
-	return true;
+
+	return video_decoder_->Init();
+}
+
+bool RtspSource::OnAudioSessionStarted(const char* codec, int rate, int channels) {
+	blog(LOG_INFO, "RTSP audio session started");
+	if (audio_disabled_) { // nothing to play with
+		blog(LOG_INFO, "no media source enabled");
+		return false;
+	}
+	bool ret = InitFFmpeg();
+	if (!ret) {
+		blog(LOG_ERROR, "Init ffmpeg format failed");
+		return false;
+	}
+
+  // init decoders
+  auto codec_name = utils::string::ToLower(codec);
+  bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
+	if (audio_decoder_ == nullptr) {
+		audio_decoder_ = new Decoder(false, hw_decode, codec_name);
+	}
+
+	media_state_ = OBS_MEDIA_STATE_PLAYING;
+
+	return audio_decoder_->Init(rate, channels);
 }
 
 void RtspSource::OnSessionStopped(const char* msg) {
@@ -619,31 +656,17 @@ void RtspSource::DestoryFFmpeg() {
 	}
 }
 
-bool RtspSource::InitFFmpeg(const char* codec, bool video) {
+bool RtspSource::InitFFmpeg() {
 	// init format context
-	fmt_ctx_ = avformat_alloc_context();
 	if (fmt_ctx_ == nullptr) {
-		blog(LOG_ERROR, "AVFormatContext init failed");
-		return false;
+		fmt_ctx_ = avformat_alloc_context();
+		if (fmt_ctx_ == nullptr) {
+			blog(LOG_ERROR, "AVFormatContext init failed");
+			return false;
+		}
 	}
 
-	// init decoders
-	auto codec_name = utils::string::ToLower(codec);
-	bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
-	if (video && !video_disabled_) {
-		if (video_decoder_ == nullptr) {
-			video_decoder_ = new Decoder(true, hw_decode, codec_name);
-		}
-		return video_decoder_->Init();
-	}
-	if (!video && !audio_disabled_) {
-		if (audio_decoder_ == nullptr) {
-			audio_decoder_ = new Decoder(false, hw_decode, codec_name);
-		}
-		return audio_decoder_->Init();
-	}
-
-	return false;
+	return true;
 }
 
 void register_rtsp_source() {

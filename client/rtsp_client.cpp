@@ -1,8 +1,11 @@
 #include "rtsp_client.h"
 
+#include <iostream>
+
 #include "Base64.hh"
 #include "utils/h264/h264_common.h"
 #include "utils/h265/h265_common.h"
+#include "utils/utils.h"
 
 namespace source {
 RtspClient::RtspClient(const std::string& uri, const std::map<std::string, std::string>& opts,
@@ -108,14 +111,34 @@ bool RtspClient::onNewSession(const char* id, const char* media, const char* cod
 				}
 			}
 		}
+
+		return observer_->OnVideoSessionStarted(codec, width_, height_);
+	}
+	if (audio) {
+		// parse sdp to extract freq and channel
+		std::string codec_name = utils::string::ToLower(codec);
+		auto fmt = utils::string::ToLower(sdp);
+		size_t pos = fmt.find(codec_name);
+
+		int rate = 0;
+		int channels = 2;
+
+		if (pos != std::string::npos) {
+			fmt.erase(0, pos + strlen(codec));
+			fmt.erase(fmt.find_first_of(" \r\n"));
+			std::vector<std::string> results;
+			utils::string::SeperateStringBy('/', fmt, results);
+			if (results.size() > 2) {
+				rate = std::stoi(results[1]);
+				channels = std::stoi(results[2]);
+			}
+		}
+
+		return observer_->OnAudioSessionStarted(codec, rate, channels);
 	}
 
-	if (audio || video) {
-		return observer_->OnSessionStarted(video, codec);
-	}
-
-  // any other session is not support
-  blog(LOG_ERROR, "not a/v stream, do not support it!");
+	// any other session is not support
+	blog(LOG_ERROR, "not a/v stream, do not support it!");
 	return false;
 }
 

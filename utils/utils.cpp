@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <regex>
+#include <sstream>
 
 namespace utils {
 std::tuple<std::string, std::string, std::string> ExtractRtspUrl(const std::string& url) {
@@ -24,16 +25,25 @@ std::tuple<std::string, std::string, std::string> ExtractRtspUrl(const std::stri
 }
 
 namespace string {
-std::string ToLower(const std::string& source) {
+std::string ToLower(const std::string source) {
 	std::string result = source;
-	std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) { return std::tolower(c); });
+	std::transform(result.begin(), result.end(), result.begin(),
+		       [](unsigned char c) { return std::tolower(c); });
 	return result;
 }
 
-std::string ToUpper(const std::string& source) {
+std::string ToUpper(const std::string source) {
 	std::string result = source;
-	std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) { return std::toupper(c); });
+	std::transform(result.begin(), result.end(), result.begin(),
+		       [](unsigned char c) { return std::toupper(c); });
 	return result;
 }
+
+void SeperateStringBy(char token, std::string source, std::vector<std::string>& result) {
+	std::istringstream f(source);
+	std::string s;
+	while (getline(f, s, token)) { result.push_back(s); }
+}
+
 } // namespace string
 } // namespace utils

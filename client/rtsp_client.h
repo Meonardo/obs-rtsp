@@ -16,7 +16,8 @@ class RTSPClientObserver {
 public:
 	virtual ~RTSPClientObserver() = default;
 
-	virtual bool OnSessionStarted(bool video, const char* codec) = 0;
+	virtual bool OnVideoSessionStarted(const char* codec, int width, int height) = 0;
+  virtual bool OnAudioSessionStarted(const char* codec, int rate, int channels) = 0;
 	virtual void OnSessionStopped(const char* msg) = 0;
 	virtual void OnData(unsigned char* buffer, ssize_t size, timeval time, bool video) = 0;
 	virtual void OnError(const char* msg) = 0;

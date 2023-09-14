@@ -30,7 +30,7 @@ public:
 	bool Avaiable() const { return codec_ctx_ != nullptr; }
 	bool HardwareDecoderAvailable() const { return hw_decoder_available_; }
 
-	bool Init();
+	bool Init(int rate = 36000, int channels = 2);
 	void Destory();
 
 	bool Decode(unsigned char* buffer, ssize_t size, timeval time, obs_source_frame* frame,
@@ -83,7 +83,8 @@ public:
 	bool OnApplyBtnClicked(obs_properties_t* props, obs_property_t* property);
 
 	// overrides begin
-	virtual bool OnSessionStarted(bool video, const char* codec) override;
+  virtual bool OnVideoSessionStarted(const char* codec, int width, int height) override;
+  virtual bool OnAudioSessionStarted(const char* codec, int rate, int channels) override;
 	virtual void OnSessionStopped(const char* msg) override;
 	virtual void OnData(unsigned char* buffer, ssize_t size, timeval time, bool video) override;
 	virtual void OnError(const char* msg) override;
@@ -109,9 +110,8 @@ private:
 	// obs source properties
 	obs_source_frame obs_frame_;
 	obs_media_state media_state_;
-	obs_source_audio obs_audio_frame_;
 
-	bool InitFFmpeg(const char* codec, bool video);
+	bool InitFFmpeg();
 	void DestoryFFmpeg();
 	bool PrepareToPlay();
 };
