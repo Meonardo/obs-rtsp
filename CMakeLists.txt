@@ -59,6 +59,8 @@ target_sources(
   src/utils/h265/h265_common.cpp
 
   # server
+  src/server/rtsp_server.h
+  src/server/rtsp_server.cpp
 
   # client
   src/client/rtsp_client.h
