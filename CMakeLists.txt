@@ -45,6 +45,10 @@ target_sources(
   src/rtsp_source.h
   src/rtsp_source.cpp
 
+  # output
+  src/rtsp_output.h
+  src/rtsp_output.cpp
+
   # utils
   src/utils/utils.h
   src/utils/utils.cpp
