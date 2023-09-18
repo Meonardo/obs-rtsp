@@ -2,6 +2,8 @@
 
 #include <obs-module.h>
 
+#include "src/server/rtsp_server.h"
+
 class RtspOutput {
 public:
 	RtspOutput(obs_data_t* settings, obs_output_t* output);
@@ -18,6 +20,8 @@ public:
 private:
 	obs_output_t* output_;
 	obs_data_t* settings_;
+
+  output::RtspServer* server_;
 };
 
 void register_rtsp_output();

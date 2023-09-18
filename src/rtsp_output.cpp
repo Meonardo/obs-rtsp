@@ -2,19 +2,39 @@
 
 RtspOutput::RtspOutput(obs_data_t* settings, obs_output_t* output)
   : output_(output),
-    settings_(settings) {}
+    settings_(settings),
+    server_(nullptr) {
+  Start();
+}
 
 RtspOutput::~RtspOutput() {}
 
 bool RtspOutput::Start() {
+  if (server_) {
+    return true;
+  }
+
+  server_ = new output::RtspServer();
+  if (!server_->Start()) {
+    delete server_;
+    server_ = nullptr;
+    return false;
+  }
+
 	return true;
 }
 
 bool RtspOutput::Stop(bool signal) {
-	return true;
+  if (server_ == nullptr)
+    return false;
+	return server_->Stop();
 }
 
-void RtspOutput::Data(struct encoder_packet* packet) {}
+void RtspOutput::Data(struct encoder_packet* packet) {
+  if (server_ != nullptr) {
+    server_->Data(packet);
+  }
+}
 
 size_t RtspOutput::GetTotalBytes() {
 	return 0;

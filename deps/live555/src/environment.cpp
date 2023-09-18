@@ -8,29 +8,25 @@
 ** -------------------------------------------------------------------------*/
 
 #include <iostream>
-#include "environment.h"
+#include "Environment.h"
 
-Environment::Environment() : Environment(m_stopRef)
-{
-}
+Environment::Environment() : Environment(m_stopRef) {}
 
-Environment::Environment(char & stop) : BasicUsageEnvironment(*BasicTaskScheduler::createNew()), m_stop(stop)
-{
+Environment::Environment(char& stop)
+  : BasicUsageEnvironment(*BasicTaskScheduler::createNew()),
+    m_stop(stop) {
 	m_stop = 0;
 }
 
-Environment::~Environment()
-{
+Environment::~Environment() {
 	TaskScheduler* scheduler = &this->taskScheduler();
-	delete scheduler;	
+	delete scheduler;
 }
 
-void Environment::mainloop()
-{
-	this->taskScheduler().doEventLoop(&m_stop);	
+void Environment::mainloop() {
+	this->taskScheduler().doEventLoop(&m_stop);
 }
 
-void Environment::stop()
-{
-	m_stop = 1;	
+void Environment::stop() {
+	m_stop = 1;
 }
