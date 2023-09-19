@@ -17,10 +17,14 @@ public:
 	}
 
 	void Feed(struct encoder_packet* packet) {
-		delete[] encoded_data_;
+    if (encoded_data_ != nullptr) {
+      delete[] encoded_data_;
+      encoded_data_ = nullptr;
+    }
+		
 		encoded_data_ = new unsigned char[packet->size];
 		memcpy(encoded_data_, packet->data, packet->size);
-		encoded_data_size_ = packet->size;
+		encoded_data_size_ = (unsigned int)packet->size;
 	}
 
 private:
@@ -35,37 +39,34 @@ private:
 
 protected:
 	virtual void doGetNextFrame() {
-		if (encoded_data_ == nullptr) {
-			handleClosure(this);
-			return;
-		}
+		if (encoded_data_ != nullptr) {
+			// Set the 'presentation time':
+			struct timeval presentation_time;
+			gettimeofday(&presentation_time, nullptr);
 
-		// Deliver the data here:
-		// Set the 'presentation time':
-		struct timeval presentation_time;
-		gettimeofday(&presentation_time, nullptr);
-		// Deliver the data here:
-		if (isCurrentlyAwaitingData()) {
-			// Normal case: The reader of this source has asked for the data
-			// (using "FramedSource::getNextFrame()").
-			// Deliver a data frame:
-			if (encoded_data_size_ > fMaxSize) {
-				fFrameSize = fMaxSize;
-				fNumTruncatedBytes = encoded_data_size_ - fMaxSize;
-			} else {
-				fFrameSize = encoded_data_size_;
+			if (isCurrentlyAwaitingData()) {
+				// Normal case: The reader of this source has asked for the data
+				// (using "FramedSource::getNextFrame()").
+				// Deliver a data frame:
+				if (encoded_data_size_ > fMaxSize) {
+					fFrameSize = fMaxSize;
+					fNumTruncatedBytes = encoded_data_size_ - fMaxSize;
+				} else {
+					fFrameSize = encoded_data_size_;
+				}
+				memmove(fTo, encoded_data_, fFrameSize);
+
+				fDurationInMicroseconds = 0;
+				fPresentationTime = presentation_time;
+				fNumTruncatedBytes = 0;
+				// Tell the reader that the data is now available:
+				FramedSource::afterGetting(this);
+
+				delete[] encoded_data_;
+        encoded_data_ = nullptr;
 			}
-			memmove(fTo, encoded_data_, fFrameSize);
 
-			fDurationInMicroseconds = 0;
-			fPresentationTime = presentation_time;
-			fNumTruncatedBytes = 0;
-			// Tell the reader that the data is now available:
-			FramedSource::afterGetting(this);
-		} else {
-			// Abnormal case: The reader of this source has *not* asked for the
-			// data.
-			// Do nothing.
+      FramedSource::afterGetting(this);
 		}
 	}
 
@@ -86,9 +87,8 @@ public:
 	    sink_(nullptr),
 	    rtcp_(nullptr),
 	    obs_source_(nullptr) {
-		// Begin by setting up our usage environment:
-		TaskScheduler* scheduler = BasicTaskScheduler::createNew();
-		env_ = BasicUsageEnvironment::createNew(*scheduler);
+    TaskScheduler* scheduler = BasicTaskScheduler::createNew();
+    env_ = BasicUsageEnvironment::createNew(*scheduler);
 		// Create 'groupsocks' for RTP and RTCP:
 		struct sockaddr_storage dst_address = {0};
 		dst_address.ss_family = AF_INET;
@@ -120,12 +120,10 @@ public:
 						CNAME, sink_, nullptr /* we're a server */, true);
 		// Note: This starts RTCP running automatically
 	}
+
 	~RtspVideoSource() {
 		Stop();
-		env_->reclaim();
 	}
-
-	UsageEnvironment* GetEnv() const { return env_; }
 
 	bool Play(ServerMediaSession* sms) {
 		if (source_ != nullptr) {
@@ -136,7 +134,7 @@ public:
 		bool ret =
 		  sms->addSubsession(PassiveServerMediaSubsession::createNew(*sink_, rtcp_));
 		if (!ret) {
-			blog(LOG_ERROR, "Add to media session failed");
+			blog(LOG_ERROR, "add to media session failed");
 			return false;
 		}
 		// Create a framer for the Video Elementary Stream:
@@ -168,7 +166,7 @@ private:
 	H264VideoStreamFramer* source_;
 	RTPSink* sink_;
 	RTCPInstance* rtcp_;
-	UsageEnvironment* env_;
+  BasicUsageEnvironment* env_;
 
 	OBSFramedSource* obs_source_;
 };
@@ -212,12 +210,22 @@ bool RtspServer::Start() {
 		return false;
 	}
 
-	env_ = new Environment();
-	server_ = RTSPServer::createNew(*env_, port_, nullptr);
-	if (server_ == nullptr) {
-		blog(LOG_ERROR, "failed to create RTSP server");
-		return false;
-	}
+  TaskScheduler* scheduler = BasicTaskScheduler::createNew();
+  env_ = BasicUsageEnvironment::createNew(*scheduler);
+
+  UserAuthenticationDatabase* auth_db = nullptr;
+#ifdef ACCESS_CONTROL
+  // To implement client access control to the RTSP server, do the following:
+  auth_db = new UserAuthenticationDatabase;
+  auth_db->addUserRecord("username1", "password1"); // replace these with real strings
+  // Repeat the above with each <username>, <password> that you wish to allow
+  // access to the server.
+#endif
+  server_ = RTSPServer::createNew(*env_, port_, auth_db);
+  if (server_ == nullptr) {
+    blog(LOG_ERROR, "failed to create RTSP server");
+    return false;
+}
 
 	sms_ = ServerMediaSession::createNew(*env_, "obs_live", "Live stream from OBS rtsp plugin",
 					     "live stream");
@@ -232,13 +240,13 @@ bool RtspServer::Start() {
 	if (!video_source_->Play(sms_)) {
 		blog(LOG_ERROR, "failed to play video source");
 		delete video_source_;
-    video_source_ = nullptr;
+		video_source_ = nullptr;
 		return false;
 	}
 
 	server_thread_ = std::thread(&RtspServer::ServerThread, this);
 
-	blog(LOG_INFO, "Play this stream using the URL: ");
+	blog(LOG_INFO, "play this stream using the URL: ");
 	if (weHaveAnIPv4Address(*env_)) {
 		auto url = server_->ipv4rtspURL(sms_);
 		blog(LOG_INFO, "%s", url);
@@ -272,7 +280,7 @@ bool RtspServer::Stop() {
 	if (server_thread_.joinable())
 		server_thread_.join();
 	if (env_ != nullptr) {
-		delete env_;
+    env_->reclaim();
 		env_ = nullptr;
 	}
 
@@ -281,11 +289,11 @@ bool RtspServer::Stop() {
 
 void RtspServer::ServerThread() {
 	os_set_thread_name("rtsp_server_thread");
-	env_->mainloop();
+	env_->taskScheduler().doEventLoop();
 }
 
 void RtspServer::Data(struct encoder_packet* packet) {
-	if (video_source_ != nullptr) {
+	if (video_source_ != nullptr && packet->type == OBS_ENCODER_VIDEO) {
 		video_source_->Feed(packet);
 	}
 }

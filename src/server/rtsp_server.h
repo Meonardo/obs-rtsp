@@ -5,7 +5,7 @@
 
 // forward declarations
 class RTSPServer;
-class Environment;
+class BasicUsageEnvironment;
 class ServerMediaSession;
 struct encoder_packet;
 
@@ -29,16 +29,20 @@ public:
 	size_t GetTotalBytes();
 	int GetConnectTime();
 
+  // static void AfterPlayingVideo(void* data);
+
 private:
 	RTSPServer* server_;
 	ServerMediaSession* sms_;
-  Environment* env_;
+  BasicUsageEnvironment* env_;
 	uint16_t port_; // default port is 8554
   std::thread server_thread_;
 
 	// sources
 	source::RtspAudioSource* audio_source_;
 	source::RtspVideoSource* video_source_;
+
+  // void CreateVideoSource();
 
   void ServerThread();
 };

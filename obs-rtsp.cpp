@@ -12,8 +12,10 @@ MODULE_EXPORT const char* obs_module_description(void) {
 bool obs_module_load() {
 	// register source
 	register_rtsp_source();
+
 	// register output & server
 	register_rtsp_output();
+  register_rtsp_service();
 
 	return true;
 }
