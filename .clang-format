@@ -149,7 +149,7 @@ BreakBeforeConceptDeclarations: Allowed
 BreakBeforeInlineASMColon: OnlyMultiline
 BreakConstructorInitializers: AfterColon
 BreakInheritanceList: AfterComma
-ColumnLimit: 120
+ColumnLimit: 100
 ConstructorInitializerIndentWidth: 2
 ContinuationIndentWidth: 2
 EmptyLineAfterAccessModifier: Never
