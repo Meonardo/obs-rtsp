@@ -27,10 +27,13 @@ bool RtspOutput::Start() {
 		return false;
 	if (!obs_output_initialize_encoders(output_, 0))
 		return false;
-	if (server_) {
-		return true;
+
+	if (server_ == nullptr) {
+    server_ = new output::RtspServer();
 	}
-	server_ = new output::RtspServer();
+  if (running_.load()) {
+    return false;
+  }
 	
 	if (start_thread_.joinable()) {
 		start_thread_.join();
@@ -87,7 +90,7 @@ void register_rtsp_output() {
 	struct obs_output_info info = {};
 
 	info.id = "rtsp_output";
-	info.flags = OBS_OUTPUT_AV | OBS_OUTPUT_ENCODED | OBS_OUTPUT_SERVICE;
+	info.flags = OBS_OUTPUT_VIDEO | OBS_OUTPUT_ENCODED | OBS_OUTPUT_SERVICE;
 	info.get_name = [](void*) -> const char* {
 		return "RTSP Output";
 	};

@@ -5,8 +5,7 @@
 
 // forward declarations
 class RTSPServer;
-class BasicUsageEnvironment;
-class ServerMediaSession;
+class Environment;
 struct encoder_packet;
 
 namespace output::source {
@@ -33,8 +32,7 @@ public:
 
 private:
 	RTSPServer* server_;
-	ServerMediaSession* sms_;
-  BasicUsageEnvironment* env_;
+  Environment* env_;
 	uint16_t port_; // default port is 8554
   std::thread server_thread_;
 
