@@ -8,6 +8,8 @@
 #include <obs.h>
 #include <util/threading.h>
 
+#include <string>
+
 namespace output::source {
 // Custom FramedSource subclass for OBS integration
 class OBSFramedSource : public FramedSource {
@@ -46,8 +48,6 @@ private:
 			struct timeval presentation_time;
 			gettimeofday(&presentation_time, nullptr);
 
-			// Normal case: The reader of this source has asked for the data
-			// (using "FramedSource::getNextFrame()").
 			// Deliver a data frame:
 			if (encoded_data_size_ > fMaxSize) {
 				fFrameSize = fMaxSize;
@@ -55,17 +55,18 @@ private:
 			} else {
 				fFrameSize = encoded_data_size_;
 			}
+
 			memmove(fTo, encoded_data_, fFrameSize);
 
 			fDurationInMicroseconds = 0;
 			fPresentationTime = presentation_time;
 			fNumTruncatedBytes = 0;
-			
+
 			delete[] encoded_data_;
 			encoded_data_ = nullptr;
 
-      // Tell the reader that the data is now available:
-      FramedSource::afterGetting(this);
+			// Tell the reader that the data is now available:
+			FramedSource::afterGetting(this);
 		}
 	}
 
@@ -83,34 +84,31 @@ private:
 /// </summary>
 class RtspVideoSource {
 public:
-	RtspVideoSource(Environment& env)
+	RtspVideoSource(Environment& env, struct sockaddr_storage& dst_address)
 	  : source_(nullptr),
 	    sink_(nullptr),
 	    rtcp_(nullptr),
 	    obs_source_(nullptr) {
 		// Create 'groupsocks' for RTP and RTCP:
-		dst_address_.ss_family = AF_INET;
-		((struct sockaddr_in&)dst_address_).sin_addr.s_addr =
-		  chooseRandomIPv4SSMAddress(env);
-
 		const unsigned short rtp_port_num = 18888;
 		const unsigned short rtcp_port_num = rtp_port_num + 1;
 		const unsigned char ttl = 255;
 		const Port rtp_port(rtp_port_num);
 		const Port rtcp_port(rtcp_port_num);
-		rtp_groupsock_ = new Groupsock(env, dst_address_, rtp_port, ttl);
+		rtp_groupsock_ = new Groupsock(env, dst_address, rtp_port, ttl);
 		rtp_groupsock_->multicastSendOnly();
-		rtcp_groupsock_ = new Groupsock(env, dst_address_, rtcp_port, ttl);
+		rtcp_groupsock_ = new Groupsock(env, dst_address, rtcp_port, ttl);
 		rtcp_groupsock_->multicastSendOnly();
 
+		/* Increase the buffer size so we can handle high res streams.. */
+		OutPacketBuffer::maxSize = 300000;
 		// Create a 'H264 Video RTP' sink from the RTP 'groupsock':
-		OutPacketBuffer::maxSize = 100000;
 		sink_ = H264VideoRTPSink::createNew(env, rtp_groupsock_, 96);
 
 		// Create (and start) a 'RTCP instance' for this RTP sink:
 		const unsigned estimated_session_bandwidth = 500; // in kbps; for RTCP b/w share
 		const unsigned max_cname_len = 100;
-		unsigned char CNAME[max_cname_len + 1];
+		unsigned char CNAME[max_cname_len + 1] = {0};
 		gethostname((char*)CNAME, max_cname_len);
 		CNAME[max_cname_len] = '\0'; // just in case
 
@@ -167,10 +165,7 @@ private:
 	H264VideoStreamFramer* source_;
 	RTPSink* sink_;
 	RTCPInstance* rtcp_;
-
 	OBSFramedSource* obs_source_;
-
-	struct sockaddr_storage dst_address_;
 	Groupsock* rtp_groupsock_;
 	Groupsock* rtcp_groupsock_;
 };
@@ -229,15 +224,19 @@ bool RtspServer::Start() {
 		return false;
 	}
 
-	auto sms = ServerMediaSession::createNew(*env_, "obs_live", "Live stream from OBS rtsp plugin",
-					     "live stream");
+	auto sms = ServerMediaSession::createNew(*env_, "obs_live",
+						 "Live stream from OBS rtsp plugin", "live stream");
 	if (sms == nullptr) {
 		blog(LOG_ERROR, "failed to create RTSP server media session");
 		return false;
 	}
 
 	// Create video source
-	video_source_ = new source::RtspVideoSource(*env_);
+	struct sockaddr_storage dst_address = {0};
+	dst_address.ss_family = AF_INET;
+	((struct sockaddr_in&)dst_address).sin_addr.s_addr = chooseRandomIPv4SSMAddress(*env_);
+
+	video_source_ = new source::RtspVideoSource(*env_, dst_address);
 	if (!video_source_->Play(*env_, sms)) {
 		blog(LOG_ERROR, "failed to play video source");
 		delete video_source_;
@@ -262,33 +261,33 @@ bool RtspServer::Start() {
 }
 
 bool RtspServer::Stop() {
-  // stop env loop
-  if (env_ != nullptr) {
-    env_->stop();
-  }
-  // detach thread
-  if (server_thread_.joinable())
-    server_thread_.join();
-  // reclaim env
-  if (env_ != nullptr) {
-    env_->reclaim();
-    env_ = nullptr;
-  }
+	// stop env loop
+	if (env_ != nullptr) {
+		env_->stop();
+	}
+	// detach thread
+	if (server_thread_.joinable())
+		server_thread_.join();
+	// reclaim env
+	if (env_ != nullptr) {
+		env_->reclaim();
+		env_ = nullptr;
+	}
 
-  // release a/v sources
-  if (audio_source_ != nullptr) {
-    delete audio_source_;
-    audio_source_ = nullptr;
-  }
-  if (video_source_ != nullptr) {
-    delete video_source_;
-    video_source_ = nullptr;
-  }
-  // close server
-  if (server_ != nullptr) {
-    Medium::close(server_);
-    server_ = nullptr;
-  }
+	// release a/v sources
+	if (audio_source_ != nullptr) {
+		delete audio_source_;
+		audio_source_ = nullptr;
+	}
+	if (video_source_ != nullptr) {
+		delete video_source_;
+		video_source_ = nullptr;
+	}
+	// close server
+	if (server_ != nullptr) {
+		Medium::close(server_);
+		server_ = nullptr;
+	}
 	return true;
 }
 
