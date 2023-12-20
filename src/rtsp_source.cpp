@@ -238,7 +238,7 @@ bool Decoder::Decode(unsigned char* buffer, ssize_t size, timeval time, obs_sour
 		     obs_source_audio* audio) {
 	// decode packet
 	if (!DecodePacket(buffer, size)) {
-		blog(LOG_INFO, "decode failed, buffer size: %u", size);
+		// blog(LOG_DEBUG, "decode failed, buffer size: %u", size);
 		return false;
 	}
 
@@ -350,7 +350,7 @@ bool Decoder::DecodePacket(unsigned char* buffer, ssize_t size) {
 	// send the packet to decoder
 	auto ret = avcodec_send_packet(codec_ctx_, pkt_);
 	if (ret < 0) {
-		blog(LOG_INFO, "sending a packet for decoding failed, error: %s", av_err2str(ret));
+		// blog(LOG_DEBUG, "sending a packet for decoding failed, error: %s", av_err2str(ret));
 		av_packet_unref(pkt_);
 		return false;
 	}
@@ -360,7 +360,7 @@ bool Decoder::DecodePacket(unsigned char* buffer, ssize_t size) {
 	if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
 		return false;
 	} else if (ret < 0) {
-		blog(LOG_INFO, "decoding failed, error: %s\n", av_err2str(ret));
+		blog(LOG_DEBUG, "decoding failed, error: %s\n", av_err2str(ret));
 		av_packet_unref(pkt_);
 		return false;
 	}

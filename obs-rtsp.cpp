@@ -14,8 +14,8 @@ bool obs_module_load() {
 	register_rtsp_source();
 
 	// register output & server
-	register_rtsp_output();
-  register_rtsp_service();
+	// register_rtsp_output();
+  // register_rtsp_service();
 
 	return true;
 }

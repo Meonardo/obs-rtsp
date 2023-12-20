@@ -1,6 +1,6 @@
 # OBS RTSP source & output
 - Directly add RTSP camera stream as an obs-source, no other external dependencies needed(but still requires FFmpeg);
-- Make obs-studio as a RTSP server(can only pull a/v stream from it).
+- Make obs-studio as a RTSP server(can only pull video(H.264 codec) stream from it).
 
 ## Motivation
 1. there is a delay issue with `Media Source` in OBS, even I set the `network buffering` to zero;
