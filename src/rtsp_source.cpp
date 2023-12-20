@@ -421,7 +421,7 @@ RtspSource::RtspSource(obs_data_t* settings, obs_source_t* source)
     fmt_ctx_(nullptr),
     hw_decode_(false),
     video_disabled_(false),
-    audio_disabled_(false) {
+    audio_disabled_(true) {
 	auto url = obs_data_get_string(settings, "url");
 	rtsp_url_ = url;
 	media_state_ = OBS_MEDIA_STATE_NONE;
@@ -471,7 +471,7 @@ void RtspSource::GetDefaults(obs_data_t* settings) {
 	obs_data_set_default_bool(settings, "stop_on_hide", true);
 	obs_data_set_default_int(settings, "restart_timeout", 20);
 	obs_data_set_default_bool(settings, "block_video", false);
-	obs_data_set_default_bool(settings, "block_audio", false);
+	obs_data_set_default_bool(settings, "block_audio", true);
 	obs_data_set_default_bool(settings, "hw_decode", false);
 	obs_data_set_default_bool(settings, "use_tcp", true);
 }
