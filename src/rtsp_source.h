@@ -83,8 +83,8 @@ public:
 	bool OnApplyBtnClicked(obs_properties_t* props, obs_property_t* property);
 
 	// overrides begin
-  virtual bool OnVideoSessionStarted(const char* codec, int width, int height) override;
-  virtual bool OnAudioSessionStarted(const char* codec, int rate, int channels) override;
+	virtual bool OnVideoSessionStarted(const char* codec, int width, int height) override;
+	virtual bool OnAudioSessionStarted(const char* codec, int rate, int channels) override;
 	virtual void OnSessionStopped(const char* msg) override;
 	virtual void OnData(unsigned char* buffer, ssize_t size, timeval time, bool video) override;
 	virtual void OnError(const char* msg) override;
@@ -106,6 +106,7 @@ private:
 	// configures
 	bool video_disabled_; // only receive audio, defalut is false
 	bool audio_disabled_; // only receive video, defalut is false
+	bool force_tcp_;      // force tcp transport, default is false
 
 	// obs source properties
 	obs_source_frame obs_frame_;

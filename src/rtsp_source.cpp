@@ -140,7 +140,7 @@ bool Decoder::Init(int rate, int channels) {
 		}
 	} else {
 		if (codec_name_ ==
-		    "mpeg4-generic") { // usually its aac (I can not get a correct way to get audio codec name)
+		    "mpeg4-generic" || codec_name_ == "mp4a-latm") { // usually its aac (I can not get a correct way to get audio codec name)
 			codec_ = avcodec_find_decoder(AV_CODEC_ID_AAC);
 			if (codec_ == nullptr) {
 				blog(LOG_ERROR, "AVCodec(aac) init failed");
@@ -161,9 +161,9 @@ bool Decoder::Init(int rate, int channels) {
 		return false;
 	}
 
-  // audio configures
+	// audio configures
 	if (!video_) {
-    codec_ctx_->channels = channels;
+		codec_ctx_->channels = channels;
 		codec_ctx_->sample_rate = rate;
 	}
 
@@ -449,6 +449,7 @@ void RtspSource::Update(obs_data_t* settings) {
 	bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
 	bool disable_video = obs_data_get_bool(settings_, "block_video");
 	bool disable_audio = obs_data_get_bool(settings_, "block_audio");
+  bool force_tcp = obs_data_get_bool(settings_, "use_tcp");
 
 	if (url != rtsp_url_) // url changed
 		need_restart = true;
@@ -458,6 +459,8 @@ void RtspSource::Update(obs_data_t* settings) {
 		need_restart = true;
 	if (disable_video != video_disabled_) // video disabled changed
 		need_restart = true;
+  if (force_tcp_ != force_tcp) // force tcp changed
+    need_restart = true;
 
 	if (need_restart)
 		PrepareToPlay();
@@ -470,6 +473,7 @@ void RtspSource::GetDefaults(obs_data_t* settings) {
 	obs_data_set_default_bool(settings, "block_video", false);
 	obs_data_set_default_bool(settings, "block_audio", false);
 	obs_data_set_default_bool(settings, "hw_decode", false);
+	obs_data_set_default_bool(settings, "use_tcp", true);
 }
 
 obs_properties* RtspSource::GetProperties() {
@@ -485,6 +489,7 @@ obs_properties* RtspSource::GetProperties() {
 	obs_properties_add_bool(props, "block_video", "Disable video");
 	obs_properties_add_bool(props, "block_audio", "Disable audio");
 	obs_properties_add_bool(props, "hw_decode", "Use hardware decode if possible");
+	obs_properties_add_bool(props, "use_tcp", "Use TCP transport");
 
 	obs_properties_add_button2(
 	  props, "apply", "Apply",
@@ -559,6 +564,10 @@ bool RtspSource::PrepareToPlay() {
 	hw_decode_ = obs_data_get_bool(settings_, "hw_decode");
 	video_disabled_ = obs_data_get_bool(settings_, "block_video");
 	audio_disabled_ = obs_data_get_bool(settings_, "block_audio");
+	force_tcp_ = obs_data_get_bool(settings_, "use_tcp");
+	if (force_tcp_) {
+		opts["rtptransport"] = "tcp";
+	}
 
 	// create rtsp client and start playing the a/v
 	client_ = new source::RtspClient(rtsp_url_, opts, this);
@@ -579,9 +588,9 @@ bool RtspSource::OnVideoSessionStarted(const char* codec, int width, int height)
 		return false;
 	}
 
-  // init decoders
-  auto codec_name = utils::string::ToLower(codec);
-  bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
+	// init decoders
+	auto codec_name = utils::string::ToLower(codec);
+	bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
 	if (video_decoder_ == nullptr) {
 		video_decoder_ = new Decoder(true, hw_decode, codec_name);
 	}
@@ -603,9 +612,9 @@ bool RtspSource::OnAudioSessionStarted(const char* codec, int rate, int channels
 		return false;
 	}
 
-  // init decoders
-  auto codec_name = utils::string::ToLower(codec);
-  bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
+	// init decoders
+	auto codec_name = utils::string::ToLower(codec);
+	bool hw_decode = obs_data_get_bool(settings_, "hw_decode");
 	if (audio_decoder_ == nullptr) {
 		audio_decoder_ = new Decoder(false, hw_decode, codec_name);
 	}
